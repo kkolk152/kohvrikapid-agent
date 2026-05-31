@@ -1,0 +1,29 @@
+[Unit]
+Description=Kohvrikapid Agent (Raspberry Pi side klient)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kohvrikapid
+Group=kohvrikapid
+ExecStart=/opt/kohvrikapid-agent/.venv/bin/kohvrikapid-agent --run
+Restart=always
+RestartSec=5
+# Vajadusel ligipääs RS485-le, GPIO-le, framebufferile
+SupplementaryGroups=dialout gpio video
+# Lihtne sandbox
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/etc/kohvrikapid-agent /var/lib/kohvrikapid-agent /var/log/kohvrikapid-agent
+PrivateTmp=true
+DevicePolicy=closed
+DeviceAllow=/dev/ttyUSB0 rw
+DeviceAllow=/dev/ttyAMA0 rw
+DeviceAllow=/dev/serial0 rw
+DeviceAllow=/dev/gpiochip0 rw
+DeviceAllow=/dev/fb0 rw
+
+[Install]
+WantedBy=multi-user.target

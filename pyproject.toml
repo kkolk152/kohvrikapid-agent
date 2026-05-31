@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kohvrikapid-agent"
+version = "0.1.0"
+description = "Raspberry Pi agent for the Kohvrikapid multi-tenant locker platform."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Kaimar Kolk", email = "kolkkaimar0@gmail.com" }]
+dependencies = [
+  "httpx>=0.27",
+  "tomli-w>=1.0",
+  "pyserial>=3.5",
+]
+
+[project.optional-dependencies]
+display = ["pygame>=2.5"]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[project.scripts]
+kohvrikapid-agent = "kohvrikapid_agent.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
