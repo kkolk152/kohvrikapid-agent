@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { agentState, startAgentPolling } from './lib/agentStore.svelte';
+  import { agentState, startAgentPolling } from './lib/agentStore';
   import Unclaimed from './views/Unclaimed.svelte';
   import Ready from './views/Ready.svelte';
   import Storage from './views/Storage.svelte';
@@ -9,9 +9,6 @@
 
   let now = $state(new Date());
   let clockTimer: number | null = null;
-
-  const view = $derived(agentState.view);
-  const cabKind = $derived(agentState.cabinet_kind);
 
   onMount(() => {
     startAgentPolling();
@@ -44,21 +41,21 @@
       <div class="text-sm font-semibold tracking-tight">Kohvrikapid</div>
     </div>
     <div class="flex items-center gap-2 text-[10px] text-slate-400">
-      <NetworkBadge network={agentState.network} />
+      <NetworkBadge network={$agentState.network} />
       <span class="font-mono">{timeStr(now)}</span>
     </div>
   </header>
 
   <div class="relative z-10 flex flex-1 items-center justify-center px-4 pb-4">
-    {#if view === 'BOOTING'}
+    {#if $agentState.view === 'BOOTING'}
       <Booting />
-    {:else if view === 'UNCLAIMED'}
-      <Unclaimed state={agentState} />
-    {:else if view === 'READY'}
-      {#if cabKind === 'storage'}
-        <Storage state={agentState} />
+    {:else if $agentState.view === 'UNCLAIMED'}
+      <Unclaimed state={$agentState} />
+    {:else if $agentState.view === 'READY'}
+      {#if $agentState.cabinet_kind === 'storage'}
+        <Storage state={$agentState} />
       {:else}
-        <Ready state={agentState} />
+        <Ready state={$agentState} />
       {/if}
     {/if}
   </div>

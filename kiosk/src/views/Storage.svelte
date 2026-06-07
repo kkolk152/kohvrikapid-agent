@@ -13,6 +13,8 @@
   let resetTimer: number | null = null;
 
   const MAX_PIN_LENGTH = 6;
+  const keys = ['1','2','3','4','5','6','7','8','9'];
+  const pinSlots = [0, 1, 2, 3, 4, 5];
 
   function pressDigit(d: string) {
     if (phase !== 'idle' || pin.length >= MAX_PIN_LENGTH) return;
@@ -82,13 +84,9 @@
       default: return code ?? 'Tundmatu viga';
     }
   }
-
-  const keys = ['1','2','3','4','5','6','7','8','9'];
-  const pinSlots = [0, 1, 2, 3, 4, 5];
 </script>
 
 {#if phase === 'idle' || phase === 'verifying' || phase === 'error'}
-  <!-- IDLE / VERIFYING / ERROR — PIN keypad ekraan -->
   <div class="flex h-full w-full max-w-sm flex-col items-center justify-center gap-6 px-4 py-4">
     <div class="text-center">
       <div class="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-emerald-300">
@@ -99,7 +97,6 @@
       <p class="mt-1 text-sm text-slate-400">Avab sinu luugi</p>
     </div>
 
-    <!-- PIN display -->
     <div class="flex items-center justify-center gap-3">
       {#each pinSlots as i}
         <div
@@ -123,7 +120,6 @@
       </div>
     {/if}
 
-    <!-- Keypad -->
     <div class="grid w-full grid-cols-3 gap-2.5">
       {#each keys as k}
         <button
@@ -158,7 +154,6 @@
   </div>
 
 {:else if phase === 'opening'}
-  <!-- OPENING — animatsioon -->
   <div class="flex h-full w-full max-w-sm flex-col items-center justify-center gap-6 px-4 py-4 text-center">
     <div class="size-24 animate-spin rounded-full border-4 border-slate-700 border-t-blue-500"></div>
     <div>
@@ -168,7 +163,6 @@
   </div>
 
 {:else if phase === 'success'}
-  <!-- SUCCESS — luuk avatud -->
   <div class="flex h-full w-full max-w-sm flex-col items-center justify-center gap-6 px-4 py-4 text-center">
     <div class="grid size-28 place-items-center rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-2xl shadow-emerald-500/40">
       <svg width="60" height="60" viewBox="0 0 24 24" fill="none">
