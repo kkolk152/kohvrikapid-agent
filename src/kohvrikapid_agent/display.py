@@ -357,27 +357,74 @@ def fb_render_state(state: dict) -> None:
         bgra[..., 1] = arr[..., 1]  # G
         bgra[..., 2] = arr[..., 0]  # R
         bgra[..., 3] = 255          # A
-        row_bytes = w * 4
         try:
-            with open(FRAMEBUFFER_PATH, "rb+") as fb:
-                bytes_written = 0
-                for y in range(h):
-                    fb.seek(y * line_length)
-                    bytes_written += fb.write(bgra[y].tobytes()[:row_bytes])
-                fb.flush()
-                try:
-                    os.fsync(fb.fileno())
-                except OSError:
-                    pass
-            log.info("fb_render: kirjutasin %d baiti /dev/fb0-le", bytes_written)
+            _write_full_buffer(bgra.tobytes(), w, h, line_length, row_bytes=w * 4)
         except PermissionError as e:
-            log.error("fb_render: PermissionError /dev/fb0-le kirjutamisel: %s (kontrolli kas %s on video grupis: id kohvrikapid)", e, "kohvrikapid")
+            log.error("fb_render: PermissionError /dev/fb0-le kirjutamisel: %s", e)
             raise
         except OSError as e:
             log.error("fb_render: OSError /dev/fb0 kirjutamisel: %s", e)
             raise
     else:
         log.warning("Toetamata fb bpp=%s — jätan vahele", bpp)
+
+
+def _write_full_buffer(data: bytes, width: int, height: int, line_length: int, row_bytes: int) -> None:
+    """Kirjuta terve framebuffer-i, ärata enne ekraan üles ja committi pärast.
+
+    Mõned DRM-shim fb ajurid (drm-rp1-dsidrmf Pi 5-l) lähevad consoleblank
+    timeout-iga energiasäästu. FBIOBLANK(UNBLANK) äratab paneeli üles enne
+    write-i. FBIOPAN_DISPLAY pärast write-i sunnib commitida.
+    """
+    import fcntl
+    FBIOGET_VSCREENINFO = 0x4600
+    FBIOPAN_DISPLAY = 0x4606
+    FBIOBLANK = 0x4611
+    FB_BLANK_UNBLANK = 0
+
+    fd = os.open(str(FRAMEBUFFER_PATH), os.O_RDWR)
+    try:
+        # Ärata ekraan üles
+        try:
+            fcntl.ioctl(fd, FBIOBLANK, FB_BLANK_UNBLANK)
+        except Exception as e:
+            log.debug("FBIOBLANK ebaõnnestus: %s", e)
+
+        bytes_written = 0
+        if row_bytes == line_length:
+            # Stride match → ühe write-iga kogu buffer
+            bytes_written = os.write(fd, data)
+        else:
+            # Stride padding — vaja rida-haaval
+            for y in range(height):
+                os.lseek(fd, y * line_length, os.SEEK_SET)
+                start = y * row_bytes
+                bytes_written += os.write(fd, data[start:start + row_bytes])
+
+        # Sunni commit
+        try:
+            import ctypes
+            class _VarScreenInfo(ctypes.Structure):
+                _fields_ = [
+                    ("xres", ctypes.c_uint32), ("yres", ctypes.c_uint32),
+                    ("xres_virtual", ctypes.c_uint32), ("yres_virtual", ctypes.c_uint32),
+                    ("xoffset", ctypes.c_uint32), ("yoffset", ctypes.c_uint32),
+                    ("bits_per_pixel", ctypes.c_uint32), ("grayscale", ctypes.c_uint32),
+                    ("padding", ctypes.c_uint8 * 200),  # ülejäänud — pole vaja täita
+                ]
+            vinfo = _VarScreenInfo()
+            fcntl.ioctl(fd, FBIOGET_VSCREENINFO, vinfo)
+            fcntl.ioctl(fd, FBIOPAN_DISPLAY, vinfo)
+        except Exception as e:
+            log.debug("FBIOPAN_DISPLAY ebaõnnestus (eiran): %s", e)
+
+        try:
+            os.fsync(fd)
+        except OSError:
+            pass
+        log.info("fb_render: kirjutasin %d baiti /dev/fb0-le", bytes_written)
+    finally:
+        os.close(fd)
 
 
 def gather_network_info() -> dict:
