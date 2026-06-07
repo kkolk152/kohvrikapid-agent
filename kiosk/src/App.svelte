@@ -1,38 +1,21 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { startStateStream, type AgentState } from './lib/state';
+  import { agentState, startAgentPolling } from './lib/agentStore.svelte';
   import Unclaimed from './views/Unclaimed.svelte';
   import Ready from './views/Ready.svelte';
   import Storage from './views/Storage.svelte';
   import Booting from './views/Booting.svelte';
   import NetworkBadge from './views/NetworkBadge.svelte';
 
-  let state = $state<AgentState>({ view: 'BOOTING' });
-  let stopStream: (() => void) | null = null;
   let now = $state(new Date());
   let clockTimer: number | null = null;
 
   onMount(() => {
-    stopStream = startStateStream((s) => {
-      // Otsene property omistamine — Svelte 5 proxy trap kindlasti trigger
-      state.view = s.view ?? 'BOOTING';
-      state.title = s.title;
-      state.message = s.message;
-      state.lines = s.lines;
-      state.cabinet_name = s.cabinet_name;
-      state.cabinet_kind = s.cabinet_kind;
-      state.slot_status = s.slot_status;
-      state.serial = s.serial;
-      state.agent_version = s.agent_version;
-      state.firmware_version = s.firmware_version;
-      state.network = s.network;
-      state.last_seen_at = s.last_seen_at;
-    });
+    startAgentPolling();
     clockTimer = window.setInterval(() => { now = new Date(); }, 30_000);
   });
 
   onDestroy(() => {
-    stopStream?.();
     if (clockTimer) clearInterval(clockTimer);
   });
 
@@ -58,21 +41,21 @@
       <div class="text-sm font-semibold tracking-tight">Kohvrikapid</div>
     </div>
     <div class="flex items-center gap-2 text-[10px] text-slate-400">
-      <NetworkBadge network={state.network} />
+      <NetworkBadge network={agentState.network} />
       <span class="font-mono">{timeStr(now)}</span>
     </div>
   </header>
 
   <div class="relative z-10 flex flex-1 items-center justify-center px-4 pb-4">
-    {#if state.view === 'BOOTING'}
+    {#if agentState.view === 'BOOTING'}
       <Booting />
-    {:else if state.view === 'UNCLAIMED'}
-      <Unclaimed {state} />
-    {:else if state.view === 'READY'}
-      {#if state.cabinet_kind === 'storage'}
-        <Storage {state} />
+    {:else if agentState.view === 'UNCLAIMED'}
+      <Unclaimed state={agentState} />
+    {:else if agentState.view === 'READY'}
+      {#if agentState.cabinet_kind === 'storage'}
+        <Storage state={agentState} />
       {:else}
-        <Ready {state} />
+        <Ready state={agentState} />
       {/if}
     {/if}
   </div>
