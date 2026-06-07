@@ -84,6 +84,7 @@
   }
 
   const keys = ['1','2','3','4','5','6','7','8','9'];
+  const pinSlots = [0, 1, 2, 3, 4, 5];
 </script>
 
 {#if phase === 'idle' || phase === 'verifying' || phase === 'error'}
@@ -100,7 +101,7 @@
 
     <!-- PIN display -->
     <div class="flex items-center justify-center gap-3">
-      {#each Array(MAX_PIN_LENGTH) as _, i}
+      {#each pinSlots as i}
         <div
           class={
             "grid size-12 place-items-center rounded-xl border text-2xl font-bold transition-all " +
