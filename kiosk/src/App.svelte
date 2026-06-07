@@ -7,14 +7,18 @@
   import Booting from './views/Booting.svelte';
   import NetworkBadge from './views/NetworkBadge.svelte';
 
-  let state: AgentState = $state({ view: 'BOOTING' });
+  let state = $state<AgentState>({ view: 'BOOTING' });
   let stopStream: (() => void) | null = null;
   let now = $state(new Date());
   let clockTimer: number | null = null;
 
   onMount(() => {
     stopStream = startStateStream((s) => {
-      state = s;
+      // Mutate in place so Svelte 5 picks up changes in child components reliably
+      for (const k of Object.keys(state) as (keyof AgentState)[]) {
+        if (!(k in s)) delete (state as any)[k];
+      }
+      Object.assign(state, s);
     });
     clockTimer = window.setInterval(() => { now = new Date(); }, 30_000);
   });
