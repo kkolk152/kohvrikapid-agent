@@ -259,12 +259,10 @@ def _load_font(size: int):
 def _build_image(state: dict, width: int, height: int):
     """Joonista state PIL Image objektile."""
     from PIL import Image, ImageDraw
-    # KONTRASTNE TEST — ere taust et kontrollida kas fbcon kirjutab peale
-    img = Image.new("RGB", (width, height), (220, 30, 60))  # ere punane
+    img = Image.new("RGB", (width, height), (12, 18, 38))  # tume navy
     draw = ImageDraw.Draw(img)
-    # Suur valge plokk üleval — väga nähtav kui ekraan toimib
-    draw.rectangle((0, 0, width, 80), fill=(255, 255, 255))
-    draw.text((20, 20), "KOHVRIKAPID TEST", fill=(0, 0, 0), font=_load_font(36))
+    # Aktsentriba üleval — bränd
+    draw.rectangle((0, 0, width, 8), fill=(56, 132, 255))
 
     portrait = height > width
     margin = max(24, min(width, height) // 20)
