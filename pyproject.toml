@@ -14,10 +14,12 @@ dependencies = [
   "httpx>=0.27",
   "tomli-w>=1.0",
   "pyserial>=3.5",
+  "Pillow>=10.0",
+  "qrcode>=7.4",
+  "numpy>=1.26",
 ]
 
 [project.optional-dependencies]
-display = ["pygame>=2.5"]
 dev = ["pytest>=8", "ruff>=0.5"]
 
 [project.scripts]
