@@ -14,11 +14,19 @@
 
   onMount(() => {
     stopStream = startStateStream((s) => {
-      // Mutate in place so Svelte 5 picks up changes in child components reliably
-      for (const k of Object.keys(state) as (keyof AgentState)[]) {
-        if (!(k in s)) delete (state as any)[k];
-      }
-      Object.assign(state, s);
+      // Otsene property omistamine — Svelte 5 proxy trap kindlasti trigger
+      state.view = s.view ?? 'BOOTING';
+      state.title = s.title;
+      state.message = s.message;
+      state.lines = s.lines;
+      state.cabinet_name = s.cabinet_name;
+      state.cabinet_kind = s.cabinet_kind;
+      state.slot_status = s.slot_status;
+      state.serial = s.serial;
+      state.agent_version = s.agent_version;
+      state.firmware_version = s.firmware_version;
+      state.network = s.network;
+      state.last_seen_at = s.last_seen_at;
     });
     clockTimer = window.setInterval(() => { now = new Date(); }, 30_000);
   });
