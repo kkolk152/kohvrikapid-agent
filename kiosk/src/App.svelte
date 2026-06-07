@@ -10,6 +10,9 @@
   let now = $state(new Date());
   let clockTimer: number | null = null;
 
+  const view = $derived(agentState.view);
+  const cabKind = $derived(agentState.cabinet_kind);
+
   onMount(() => {
     startAgentPolling();
     clockTimer = window.setInterval(() => { now = new Date(); }, 30_000);
@@ -47,12 +50,12 @@
   </header>
 
   <div class="relative z-10 flex flex-1 items-center justify-center px-4 pb-4">
-    {#if agentState.view === 'BOOTING'}
+    {#if view === 'BOOTING'}
       <Booting />
-    {:else if agentState.view === 'UNCLAIMED'}
+    {:else if view === 'UNCLAIMED'}
       <Unclaimed state={agentState} />
-    {:else if agentState.view === 'READY'}
-      {#if agentState.cabinet_kind === 'storage'}
+    {:else if view === 'READY'}
+      {#if cabKind === 'storage'}
         <Storage state={agentState} />
       {:else}
         <Ready state={agentState} />
