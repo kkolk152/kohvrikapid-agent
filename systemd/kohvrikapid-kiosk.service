@@ -1,0 +1,43 @@
+[Unit]
+Description=Kohvrikapid Kiosk Display (cage + chromium full-screen)
+After=kohvrikapid-agent.service
+Wants=kohvrikapid-agent.service
+
+[Service]
+Type=simple
+User=kohvrikapid
+Group=kohvrikapid
+SupplementaryGroups=video render input tty seat
+Environment=HOME=/var/lib/kohvrikapid-agent
+Environment=XDG_RUNTIME_DIR=/run/user/kohvrikapid-kiosk
+Environment=WLR_NO_HARDWARE_CURSORS=1
+ExecStartPre=/bin/mkdir -p /run/user/kohvrikapid-kiosk
+ExecStartPre=/bin/chown kohvrikapid:kohvrikapid /run/user/kohvrikapid-kiosk
+ExecStartPre=/bin/chmod 700 /run/user/kohvrikapid-kiosk
+# Oota et lokaalne kiosk_server vastaks (max 30s)
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 30); do curl -fsS http://127.0.0.1:7080/api/healthz >/dev/null && exit 0; sleep 1; done; exit 0'
+ExecStart=/usr/bin/cage -s -- /usr/bin/chromium-browser \
+  --kiosk \
+  --noerrdialogs \
+  --disable-infobars \
+  --disable-translate \
+  --disable-features=TranslateUI \
+  --no-first-run \
+  --no-default-browser-check \
+  --check-for-update-interval=31536000 \
+  --disable-pinch \
+  --overscroll-history-navigation=0 \
+  --autoplay-policy=no-user-gesture-required \
+  --user-data-dir=/var/lib/kohvrikapid-agent/chromium \
+  --window-size=720,1280 \
+  --window-position=0,0 \
+  http://127.0.0.1:7080
+Restart=always
+RestartSec=3
+TTYPath=/dev/tty7
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

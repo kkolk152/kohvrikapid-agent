@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+:root {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-feature-settings: 'cv11', 'ss03';
+}
+
+html, body, #app { height: 100%; margin: 0; padding: 0; overscroll-behavior: none; }
+* { -webkit-user-select: none; user-select: none; }
+::-webkit-scrollbar { display: none; }

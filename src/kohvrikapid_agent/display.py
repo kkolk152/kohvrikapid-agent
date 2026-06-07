@@ -37,7 +37,7 @@ def write_state(state: dict) -> None:
     STATE_PATH.write_text(json.dumps(state, indent=2))
 
 
-def claim_state(serial: str, server_url: str, agent_version: str, firmware_version: Optional[str], network_info: dict) -> dict:
+def claim_state(serial: str, server_url: str, agent_version: str, firmware_version: Optional[str], network_info: dict, network_state: dict | None = None) -> dict:
     claim_url = f"{server_url.rstrip('/')}/devices?serial={serial}"
     return {
         "view": "UNCLAIMED",
@@ -50,16 +50,25 @@ def claim_state(serial: str, server_url: str, agent_version: str, firmware_versi
         ],
         "qr_url": claim_url,
         "qr_label": f"Skanni või ava: {claim_url}",
+        "serial": serial,
+        "agent_version": agent_version,
+        "firmware_version": firmware_version,
+        "network": network_state or {},
     }
 
 
-def ready_state(cabinet_name: str, cabinet_kind: str, slot_status: dict | None = None) -> dict:
+def ready_state(cabinet_name: str, cabinet_kind: str, slot_status: dict | None = None, network_state: dict | None = None, serial: str | None = None, agent_version: str | None = None) -> dict:
     return {
         "view": "READY",
         "title": cabinet_name,
         "message": "Tere tulemast!",
         "lines": [],
         "slot_status": slot_status or {},
+        "cabinet_name": cabinet_name,
+        "cabinet_kind": cabinet_kind,
+        "serial": serial,
+        "agent_version": agent_version,
+        "network": network_state or {},
     }
 
 

@@ -14,6 +14,7 @@ from .config import AgentConfig, AgentSecrets, read_or_create_serial
 from .display import claim_state, gather_network_info, ready_state, render_to_framebuffer
 from .hardware import gather_hardware_info, gather_telemetry, send_rs485_packet
 from . import discovery, network
+from . import kiosk_server
 from .ota import apply_firmware
 
 logging.basicConfig(
@@ -153,9 +154,17 @@ def run() -> None:
 
     display_on = config.resolve_display_enabled()
     net_state = network.gather_network_state()
+    kiosk_started = kiosk_server.start_kiosk_server()
+    # Kui kiosk Chromium serveerib UI-d, ärme dubleerime fb-rendiga
+    if kiosk_started:
+        display_on = False
+        log.info("kiosk HTTP server käivitatud — fb_render lülitatud välja")
     log.info(
-        "Kohvrikapid agent %s käivitub (serial=%s, server=%s, display=%s, network=%s)",
-        __version__, serial, config.server_url, "on" if display_on else "off", net_state.get("mode"),
+        "Kohvrikapid agent %s käivitub (serial=%s, server=%s, display=%s, kiosk=%s, network=%s)",
+        __version__, serial, config.server_url,
+        "on" if display_on else "off",
+        "on" if kiosk_started else "off",
+        net_state.get("mode"),
     )
 
     last_discovery_ts = 0.0
@@ -165,15 +174,21 @@ def run() -> None:
         client = client_
         secrets = ensure_registered(client, secrets, serial, hw_info)
 
-        # First display state
+        # First display state (kirjutab ka JSON-i, mida kiosk HTTP server loeb)
+        initial_state = claim_state(
+            serial=serial,
+            server_url=config.server_url,
+            agent_version=__version__,
+            firmware_version=_firmware_version(),
+            network_info=gather_network_info(),
+            network_state=net_state,
+        )
         if display_on:
-            render_to_framebuffer(claim_state(
-                serial=serial,
-                server_url=config.server_url,
-                agent_version=__version__,
-                firmware_version=_firmware_version(),
-                network_info=gather_network_info(),
-            ))
+            render_to_framebuffer(initial_state)
+        else:
+            # Kioski jaoks ainult kirjuta JSON-i, ära renderda fb-le
+            from .display import write_state
+            write_state(initial_state)
 
         backoff = config.long_poll_retry_seconds
         while _running:
@@ -215,22 +230,30 @@ def run() -> None:
                 continue
             backoff = config.long_poll_retry_seconds
 
-            # Update display based on paired state
+            # Update display state — alati kirjutame JSON-i (kiosk loeb), fb ainult kui display_on
+            cfg_part = resp.get("config", {})
+            if cfg_part.get("paired"):
+                new_state = ready_state(
+                    cabinet_name=cfg_part.get("cabinet_name", "Kohvrikapp"),
+                    cabinet_kind=cfg_part.get("cabinet_kind", "vending"),
+                    network_state=net_state,
+                    serial=serial,
+                    agent_version=__version__,
+                )
+            else:
+                new_state = claim_state(
+                    serial=serial,
+                    server_url=config.server_url,
+                    agent_version=__version__,
+                    firmware_version=_firmware_version(),
+                    network_info=gather_network_info(),
+                    network_state=net_state,
+                )
             if display_on:
-                cfg_part = resp.get("config", {})
-                if cfg_part.get("paired"):
-                    render_to_framebuffer(ready_state(
-                        cabinet_name=cfg_part.get("cabinet_name", "Kohvrikapp"),
-                        cabinet_kind=cfg_part.get("cabinet_kind", "vending"),
-                    ))
-                else:
-                    render_to_framebuffer(claim_state(
-                        serial=serial,
-                        server_url=config.server_url,
-                        agent_version=__version__,
-                        firmware_version=_firmware_version(),
-                        network_info=gather_network_info(),
-                    ))
+                render_to_framebuffer(new_state)
+            else:
+                from .display import write_state
+                write_state(new_state)
 
             handle_long_poll_response(client, resp, config)
 

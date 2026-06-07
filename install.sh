@@ -14,6 +14,7 @@ STATE_DIR="/var/lib/kohvrikapid-agent"
 LOG_DIR="/var/log/kohvrikapid-agent"
 SERVICE_USER="kohvrikapid"
 SERVER_URL_DEFAULT="${SERVER_URL:-https://ctr-locker.kakuweb.ee}"
+ENABLE_KIOSK="${ENABLE_KIOSK:-1}"   # 0 = ainult headless agent (ekraanita Pi)
 
 require_root() {
   if [[ $EUID -ne 0 ]]; then
@@ -23,28 +24,34 @@ require_root() {
 }
 
 ensure_deps() {
-  echo "[1/7] Paigaldan Debiani paketid"
+  echo "[1/9] Paigaldan Debiani paketid"
   apt-get update -qq
   apt-get install -y --no-install-recommends \
     python3 python3-venv python3-pip git ca-certificates curl \
-    busybox dnsmasq nftables usb-modeswitch udev iproute2 iputils-ping
-  # NB: NetworkManager/ModemManager/dhcpcd-d EI paigalda — me kasutame
-  # busybox udhcpc-d + custom systemd unit-eid (vt scripts/network/).
-  # Vt network-bootstrap.sh, mis nad keelab/maskib paigalduse ajal.
+    busybox dnsmasq nftables usb-modeswitch udev iproute2 iputils-ping \
+    fonts-dejavu-core
+
+  if [[ "$ENABLE_KIOSK" == "1" ]]; then
+    echo "[1b/9] Paigaldan kioski paketid (chromium + cage + node)"
+    apt-get install -y --no-install-recommends \
+      chromium-browser cage seatd \
+      nodejs npm
+  fi
 }
 
 ensure_user() {
   if ! id "$SERVICE_USER" &>/dev/null; then
-    echo "[2/7] Loon kasutaja $SERVICE_USER"
-    useradd --system --no-create-home --shell /usr/sbin/nologin "$SERVICE_USER"
+    echo "[2/9] Loon kasutaja $SERVICE_USER"
+    useradd --system --create-home --home-dir "$STATE_DIR" --shell /usr/sbin/nologin "$SERVICE_USER"
   else
-    echo "[2/7] Kasutaja $SERVICE_USER on juba olemas"
+    echo "[2/9] Kasutaja $SERVICE_USER on juba olemas"
   fi
-  usermod -aG dialout,gpio,video,netdev "$SERVICE_USER" || true
+  usermod -aG dialout,gpio,video,netdev,input,render,seat,tty "$SERVICE_USER" 2>/dev/null || \
+    usermod -aG dialout,gpio,video,netdev,input,render "$SERVICE_USER" || true
 }
 
 clone_or_update() {
-  echo "[3/7] Tarkvara ${INSTALL_DIR}"
+  echo "[3/9] Tarkvara ${INSTALL_DIR}"
   if [[ -d "$INSTALL_DIR/.git" ]]; then
     git -C "$INSTALL_DIR" fetch --quiet
     git -C "$INSTALL_DIR" reset --hard origin/main --quiet
@@ -55,7 +62,7 @@ clone_or_update() {
 }
 
 install_venv() {
-  echo "[4/7] Python venv + sõltuvused"
+  echo "[4/9] Python venv + sõltuvused"
   if [[ ! -d "$INSTALL_DIR/.venv" ]]; then
     python3 -m venv "$INSTALL_DIR/.venv"
   fi
@@ -63,8 +70,24 @@ install_venv() {
   "$INSTALL_DIR/.venv/bin/pip" install --quiet "$INSTALL_DIR"
 }
 
+build_kiosk_ui() {
+  if [[ "$ENABLE_KIOSK" != "1" ]]; then
+    echo "[5/9] Kiosk UI build pole vajalik (ENABLE_KIOSK=0)"
+    return
+  fi
+  echo "[5/9] Kioski UI build (Vite + Svelte)"
+  cd "$INSTALL_DIR/kiosk"
+  if [[ ! -d node_modules ]]; then
+    npm ci --no-audit --no-fund --silent 2>&1 | tail -5
+  fi
+  if [[ ! -d dist ]] || [[ src/App.svelte -nt dist/index.html ]]; then
+    npm run build 2>&1 | tail -5
+  fi
+  cd - >/dev/null
+}
+
 write_config() {
-  echo "[5/7] Konfiguratsioon $CONFIG_DIR"
+  echo "[6/9] Konfiguratsioon $CONFIG_DIR"
   mkdir -p "$CONFIG_DIR" "$STATE_DIR" "$LOG_DIR"
   chown -R "$SERVICE_USER:$SERVICE_USER" "$CONFIG_DIR" "$STATE_DIR" "$LOG_DIR"
   chmod 750 "$CONFIG_DIR" "$STATE_DIR"
@@ -76,7 +99,8 @@ long_poll_timeout = 30
 long_poll_retry_seconds = 5
 firmware_install_command = "/opt/kohvrikapid-agent/bin/install-firmware.sh"
 # display_mode: "auto" (vaatab /dev/fb0), "force_on", "force_off"
-display_mode = "auto"
+# Kui kiosk Chromium töötab, agent ei kasuta fb-d nagunii.
+display_mode = "force_off"
 discovery_enabled = true
 discovery_interval_minutes = 30
 # serial_port = "/dev/ttyUSB0"   # ava kui RS485 dongl
@@ -88,30 +112,63 @@ EOF
 }
 
 install_network_bootstrap() {
-  echo "[6/7] Network bootstrap (udhcpc usb0/eth0 + dnsmasq + nft NAT)"
-  # network-bootstrap.sh paigaldab kõik /usr/local/sbin skriptid,
-  # systemd unit-id, dnsmasq drop-in ja keelab konkureerivad daemonid.
+  echo "[7/9] Network bootstrap (udhcpc usb0/eth0 + dnsmasq + nft NAT)"
   INSTALL_DIR="$INSTALL_DIR" bash "$INSTALL_DIR/scripts/network-bootstrap.sh"
 }
 
+apply_kernel_cmdline() {
+  # Lisa fbcon=map:1 + consoleblank=0 (kioski jaoks fbcon ei tohi fb0-d hoida)
+  local cmdline=/boot/firmware/cmdline.txt
+  [[ -f $cmdline ]] || cmdline=/boot/cmdline.txt
+  [[ -f $cmdline ]] || { echo "Hoiatus: cmdline.txt ei leitud"; return; }
+
+  local need_reboot=0
+  if ! grep -q "fbcon=map:1" "$cmdline"; then
+    sed -i 's| *$| fbcon=map:1|' "$cmdline"
+    need_reboot=1
+  fi
+  if ! grep -q "consoleblank=0" "$cmdline"; then
+    sed -i 's| *$| consoleblank=0|' "$cmdline"
+    need_reboot=1
+  fi
+  if [[ "$need_reboot" == "1" ]]; then
+    echo "[8/9] Kerneli cmdline uuendatud (fbcon=map:1 consoleblank=0) — vajab REBOOT-i"
+    NEED_REBOOT=1
+  else
+    echo "[8/9] Kerneli cmdline juba seadistatud"
+  fi
+}
+
 install_service() {
-  echo "[7/7] systemd unit"
+  echo "[9/9] systemd unit-id"
   install -m 644 "$INSTALL_DIR/systemd/kohvrikapid-agent.service" /etc/systemd/system/
   install -d -m 755 /opt/kohvrikapid-agent/bin
   install -m 755 "$INSTALL_DIR/scripts/install-firmware.sh" /opt/kohvrikapid-agent/bin/install-firmware.sh
+
+  if [[ "$ENABLE_KIOSK" == "1" ]]; then
+    install -m 644 "$INSTALL_DIR/systemd/kohvrikapid-kiosk.service" /etc/systemd/system/
+  fi
+
   systemctl daemon-reload
   systemctl enable --now kohvrikapid-agent.service
+  if [[ "$ENABLE_KIOSK" == "1" ]]; then
+    systemctl enable --now kohvrikapid-kiosk.service || true
+  fi
   sleep 2
   systemctl status --no-pager kohvrikapid-agent.service || true
 }
+
+NEED_REBOOT=0
 
 require_root
 ensure_deps
 ensure_user
 clone_or_update
 install_venv
+build_kiosk_ui
 write_config
 install_network_bootstrap
+apply_kernel_cmdline
 install_service
 
 cat <<EOF
@@ -126,6 +183,15 @@ Järgmised sammud:
   - Vali platform + kapp ja kliki "Seo platformiga"
 
 Kasulikud käsud:
-  sudo systemctl status kohvrikapid-agent
+  sudo systemctl status kohvrikapid-agent kohvrikapid-kiosk
   sudo journalctl -u kohvrikapid-agent -f
+  sudo journalctl -u kohvrikapid-kiosk -f
 EOF
+
+if [[ "$NEED_REBOOT" == "1" ]]; then
+  cat <<EOF
+
+⚠ Kerneli cmdline muudeti (fbcon=map:1 consoleblank=0).
+   Käivita sudo reboot, et kioski ekraan korralikult tööle saada.
+EOF
+fi

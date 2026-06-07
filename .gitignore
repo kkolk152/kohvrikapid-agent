@@ -3,11 +3,16 @@ __pycache__/
 .venv/
 .eggs/
 *.egg-info/
-build/
-dist/
+/build/
+/dist/
 .pytest_cache/
 .ruff_cache/
 .coverage
 htmlcov/
 .env
 secrets.toml
+
+# kiosk frontend
+kiosk/node_modules/
+kiosk/.vite/
+# NB! kiosk/dist/ on commited et install.sh ei peaks Pi peal npm-i jooksutama
