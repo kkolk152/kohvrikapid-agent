@@ -7,7 +7,8 @@ Wants=kohvrikapid-agent.service
 Type=simple
 User=kohvrikapid
 Group=kohvrikapid
-SupplementaryGroups=video render input tty seat
+# NB: SupplementaryGroups eemaldatud — usermod install.sh-s lisab user-i
+# video/render/input/tty/dialout gruppidesse otse, systemd ei vaja seda topelt.
 Environment=HOME=/var/lib/kohvrikapid-agent
 Environment=XDG_RUNTIME_DIR=/run/user/kohvrikapid-kiosk
 Environment=WLR_NO_HARDWARE_CURSORS=1
