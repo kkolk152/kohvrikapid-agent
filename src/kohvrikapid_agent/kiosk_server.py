@@ -16,6 +16,10 @@ import threading
 from pathlib import Path
 from typing import Optional
 
+import httpx
+
+from .config import AgentConfig, AgentSecrets
+
 log = logging.getLogger(__name__)
 
 # Pi-l: /opt/kohvrikapid-agent/kiosk/dist/
@@ -60,6 +64,46 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
             self.path = "/"
         super().do_GET()
 
+    def do_POST(self) -> None:  # noqa: N802
+        if self.path == "/api/storage/verify-pin":
+            self._proxy_storage_verify_pin()
+            return
+        self.send_response(404)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(b'{"error":"not_found"}')
+
+    def _proxy_storage_verify_pin(self) -> None:
+        """Edasta PIN platformi /api/agent/v1/storage/verify-pin endpoint-ile."""
+        length = int(self.headers.get("Content-Length") or 0)
+        body_raw = self.rfile.read(length) if length > 0 else b"{}"
+        try:
+            body = json.loads(body_raw)
+        except json.JSONDecodeError:
+            self._send_json({"ok": False, "error": "bad_json"}, status=400)
+            return
+
+        config = AgentConfig.load()
+        secrets = AgentSecrets.load()
+        if not secrets.device_id or not secrets.agent_token:
+            self._send_json({"ok": False, "error": "agent_not_registered"}, status=503)
+            return
+
+        url = f"{config.server_url.rstrip('/')}/api/agent/v1/storage/verify-pin"
+        headers = {
+            "X-Device-Id": secrets.device_id,
+            "Authorization": f"Bearer {secrets.agent_token}",
+            "Content-Type": "application/json",
+        }
+        try:
+            r = httpx.post(url, json={"pin": str(body.get("pin", ""))}, headers=headers, timeout=10)
+            data = r.json()
+            log.info("storage verify-pin -> %s (status=%d)", data.get("ok"), r.status_code)
+            self._send_json(data, status=r.status_code)
+        except Exception as e:
+            log.error("storage verify-pin proxy ebaõnnestus: %s", e)
+            self._send_json({"ok": False, "error": f"network: {e}"}, status=502)
+
     def _serve_state(self) -> None:
         state: dict = {"view": "BOOTING"}
         try:
@@ -69,9 +113,9 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
             log.debug("State faili lugemine ebaõnnestus: %s", e)
         self._send_json(state)
 
-    def _send_json(self, data: dict) -> None:
+    def _send_json(self, data: dict, status: int = 200) -> None:
         body = json.dumps(data).encode("utf-8")
-        self.send_response(200)
+        self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")

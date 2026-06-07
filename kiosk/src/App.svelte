@@ -3,6 +3,7 @@
   import { startStateStream, type AgentState } from './lib/state';
   import Unclaimed from './views/Unclaimed.svelte';
   import Ready from './views/Ready.svelte';
+  import Storage from './views/Storage.svelte';
   import Booting from './views/Booting.svelte';
   import NetworkBadge from './views/NetworkBadge.svelte';
 
@@ -56,7 +57,11 @@
     {:else if state.view === 'UNCLAIMED'}
       <Unclaimed {state} />
     {:else if state.view === 'READY'}
-      <Ready {state} />
+      {#if state.cabinet_kind === 'storage'}
+        <Storage {state} />
+      {:else}
+        <Ready {state} />
+      {/if}
     {/if}
   </div>
 </main>
