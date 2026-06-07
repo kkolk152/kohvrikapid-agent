@@ -318,8 +318,12 @@ def _build_image(state: dict, width: int, height: int):
 def fb_render_state(state: dict) -> None:
     info = fb_info()
     if not info:
-        log.debug("fb_info pole loetav")
+        log.warning("fb_render: fb_info ei suutnud lugeda (sysfs/ioctl/fbset kõik kukkusid) — render skip")
         return
+    log.info(
+        "fb_render: %dx%d @ %dbpp source=%s line_length=%d",
+        info["width"], info["height"], info["bpp"], info.get("source"), info["line_length"],
+    )
     try:
         import numpy as np
     except ImportError:
@@ -327,7 +331,11 @@ def fb_render_state(state: dict) -> None:
         return
     w, h, bpp = info["width"], info["height"], info["bpp"]
     line_length = info.get("line_length") or (w * bpp // 8)
-    img = _build_image(state, w, h)
+    try:
+        img = _build_image(state, w, h)
+    except Exception as e:
+        log.error("PIL _build_image ebaõnnestus: %s", e)
+        raise
     arr = np.array(img.convert("RGB"))
     if bpp == 16:
         r = (arr[..., 0].astype(np.uint16) & 0xF8) << 8
@@ -346,10 +354,24 @@ def fb_render_state(state: dict) -> None:
         bgra[..., 2] = arr[..., 0]  # R
         bgra[..., 3] = 255          # A
         row_bytes = w * 4
-        with open(FRAMEBUFFER_PATH, "rb+") as fb:
-            for y in range(h):
-                fb.seek(y * line_length)
-                fb.write(bgra[y].tobytes()[:row_bytes])
+        try:
+            with open(FRAMEBUFFER_PATH, "rb+") as fb:
+                bytes_written = 0
+                for y in range(h):
+                    fb.seek(y * line_length)
+                    bytes_written += fb.write(bgra[y].tobytes()[:row_bytes])
+                fb.flush()
+                try:
+                    os.fsync(fb.fileno())
+                except OSError:
+                    pass
+            log.info("fb_render: kirjutasin %d baiti /dev/fb0-le", bytes_written)
+        except PermissionError as e:
+            log.error("fb_render: PermissionError /dev/fb0-le kirjutamisel: %s (kontrolli kas %s on video grupis: id kohvrikapid)", e, "kohvrikapid")
+            raise
+        except OSError as e:
+            log.error("fb_render: OSError /dev/fb0 kirjutamisel: %s", e)
+            raise
     else:
         log.warning("Toetamata fb bpp=%s — jätan vahele", bpp)
 
