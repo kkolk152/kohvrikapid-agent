@@ -79,7 +79,123 @@ def render_to_framebuffer(state: dict) -> None:
 
 
 def fb_info() -> Optional[dict]:
-    """Loe /sys/class/graphics/fb0/ — width, height, bpp, line_length."""
+    """Hangi framebuffer info — proovi mitut allikat järjestikku.
+
+    1. ioctl FBIOGET_VSCREENINFO + FBIOGET_FSCREENINFO (kõige stabiilsem,
+       töötab ka RP1 DSI-l kus sysfs entry-d on restricted)
+    2. /sys/class/graphics/fb0/* (vanade Pi mudelite jaoks)
+    3. fbset -i parse (kui fbset on installeeritud)
+    """
+    info = _fb_info_via_ioctl()
+    if info:
+        return info
+    info = _fb_info_via_sysfs()
+    if info:
+        return info
+    return _fb_info_via_fbset()
+
+
+def _fb_info_via_ioctl() -> Optional[dict]:
+    try:
+        import ctypes
+        import fcntl
+    except ImportError:
+        return None
+    if not FRAMEBUFFER_PATH.exists():
+        return None
+
+    class _Bitfield(ctypes.Structure):
+        _fields_ = [
+            ("offset", ctypes.c_uint32),
+            ("length", ctypes.c_uint32),
+            ("msb_right", ctypes.c_uint32),
+        ]
+
+    class _VarScreenInfo(ctypes.Structure):
+        _fields_ = [
+            ("xres", ctypes.c_uint32),
+            ("yres", ctypes.c_uint32),
+            ("xres_virtual", ctypes.c_uint32),
+            ("yres_virtual", ctypes.c_uint32),
+            ("xoffset", ctypes.c_uint32),
+            ("yoffset", ctypes.c_uint32),
+            ("bits_per_pixel", ctypes.c_uint32),
+            ("grayscale", ctypes.c_uint32),
+            ("red", _Bitfield),
+            ("green", _Bitfield),
+            ("blue", _Bitfield),
+            ("transp", _Bitfield),
+            ("nonstd", ctypes.c_uint32),
+            ("activate", ctypes.c_uint32),
+            ("height", ctypes.c_uint32),
+            ("width", ctypes.c_uint32),
+            ("accel_flags", ctypes.c_uint32),
+            ("pixclock", ctypes.c_uint32),
+            ("left_margin", ctypes.c_uint32),
+            ("right_margin", ctypes.c_uint32),
+            ("upper_margin", ctypes.c_uint32),
+            ("lower_margin", ctypes.c_uint32),
+            ("hsync_len", ctypes.c_uint32),
+            ("vsync_len", ctypes.c_uint32),
+            ("sync", ctypes.c_uint32),
+            ("vmode", ctypes.c_uint32),
+            ("rotate", ctypes.c_uint32),
+            ("colorspace", ctypes.c_uint32),
+            ("reserved", ctypes.c_uint32 * 4),
+        ]
+
+    class _FixScreenInfo(ctypes.Structure):
+        _fields_ = [
+            ("id", ctypes.c_char * 16),
+            ("smem_start", ctypes.c_ulong),
+            ("smem_len", ctypes.c_uint32),
+            ("type", ctypes.c_uint32),
+            ("type_aux", ctypes.c_uint32),
+            ("visual", ctypes.c_uint32),
+            ("xpanstep", ctypes.c_uint16),
+            ("ypanstep", ctypes.c_uint16),
+            ("ywrapstep", ctypes.c_uint16),
+            ("line_length", ctypes.c_uint32),
+            ("mmio_start", ctypes.c_ulong),
+            ("mmio_len", ctypes.c_uint32),
+            ("accel", ctypes.c_uint32),
+            ("capabilities", ctypes.c_uint16),
+            ("reserved", ctypes.c_uint16 * 2),
+        ]
+
+    FBIOGET_VSCREENINFO = 0x4600
+    FBIOGET_FSCREENINFO = 0x4602
+    try:
+        fd = os.open(str(FRAMEBUFFER_PATH), os.O_RDONLY)
+    except OSError as e:
+        log.debug("fb_info_ioctl: open ebaõnnestus: %s", e)
+        return None
+    try:
+        vinfo = _VarScreenInfo()
+        finfo = _FixScreenInfo()
+        fcntl.ioctl(fd, FBIOGET_VSCREENINFO, vinfo)
+        fcntl.ioctl(fd, FBIOGET_FSCREENINFO, finfo)
+        return {
+            "width": int(vinfo.xres),
+            "height": int(vinfo.yres),
+            "bpp": int(vinfo.bits_per_pixel),
+            "line_length": int(finfo.line_length),
+            "red_offset": int(vinfo.red.offset),
+            "green_offset": int(vinfo.green.offset),
+            "blue_offset": int(vinfo.blue.offset),
+            "source": "ioctl",
+        }
+    except Exception as e:
+        log.debug("fb_info_ioctl ebaõnnestus: %s", e)
+        return None
+    finally:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+
+
+def _fb_info_via_sysfs() -> Optional[dict]:
     sysfb = Path("/sys/class/graphics/fb0")
     if not sysfb.exists():
         return None
@@ -88,10 +204,40 @@ def fb_info() -> Optional[dict]:
         bpp = int((sysfb / "bits_per_pixel").read_text().strip())
         line_length = int((sysfb / "stride").read_text().strip())
         w, h = (int(x) for x in vsize.split(","))
-        return {"width": w, "height": h, "bpp": bpp, "line_length": line_length}
+        return {"width": w, "height": h, "bpp": bpp, "line_length": line_length, "source": "sysfs"}
     except Exception as e:
-        log.debug("fb_info viga: %s", e)
+        log.debug("fb_info_sysfs viga: %s", e)
         return None
+
+
+def _fb_info_via_fbset() -> Optional[dict]:
+    if not shutil.which("fbset"):
+        return None
+    try:
+        out = subprocess.run(["fbset", "-i"], capture_output=True, text=True, timeout=3)
+    except Exception:
+        return None
+    if out.returncode != 0:
+        return None
+    width = height = bpp = line_length = None
+    for line in out.stdout.splitlines():
+        ls = line.strip()
+        if ls.startswith("geometry"):
+            parts = ls.split()
+            try:
+                width = int(parts[1]); height = int(parts[2]); bpp = int(parts[5])
+            except (ValueError, IndexError):
+                pass
+        elif ls.startswith("LineLength"):
+            try:
+                line_length = int(ls.split(":", 1)[1].strip())
+            except ValueError:
+                pass
+    if width and height and bpp:
+        if not line_length:
+            line_length = width * bpp // 8
+        return {"width": width, "height": height, "bpp": bpp, "line_length": line_length, "source": "fbset"}
+    return None
 
 
 def _load_font(size: int):
