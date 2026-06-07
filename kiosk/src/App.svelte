@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { generateQRSVG } from './lib/qr';
   import { startStateStream, type AgentState } from './lib/state';
   import Unclaimed from './views/Unclaimed.svelte';
   import Ready from './views/Ready.svelte';
@@ -8,8 +7,6 @@
   import NetworkBadge from './views/NetworkBadge.svelte';
 
   let state: AgentState = $state({ view: 'BOOTING' });
-  let qrSvg = $state<string>('');
-  let qrSeed = $state<string>('');
   let stopStream: (() => void) | null = null;
   let now = $state(new Date());
   let clockTimer: number | null = null;
@@ -24,14 +21,6 @@
   onDestroy(() => {
     stopStream?.();
     if (clockTimer) clearInterval(clockTimer);
-  });
-
-  $effect(() => {
-    const url = state.qr_url;
-    if (url && url !== qrSeed) {
-      qrSeed = url;
-      generateQRSVG(url, 720).then((svg) => { qrSvg = svg; });
-    }
   });
 
   function timeStr(d: Date) {
@@ -65,7 +54,7 @@
     {#if state.view === 'BOOTING'}
       <Booting />
     {:else if state.view === 'UNCLAIMED'}
-      <Unclaimed {state} {qrSvg} />
+      <Unclaimed {state} />
     {:else if state.view === 'READY'}
       <Ready {state} />
     {/if}
