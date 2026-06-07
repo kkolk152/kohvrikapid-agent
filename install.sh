@@ -39,7 +39,7 @@ ensure_deps() {
       chromium_pkg="chromium-browser"
     fi
     apt-get install -y --no-install-recommends \
-      "$chromium_pkg" cage seatd \
+      "$chromium_pkg" cage seatd cog \
       nodejs npm
   fi
 }

@@ -20,7 +20,8 @@ Environment=LANG=et_EE.UTF-8
 Environment=LC_ALL=et_EE.UTF-8
 # Oota et lokaalne kiosk_server vastaks (max 30s)
 ExecStartPre=/bin/sh -c 'for i in $(seq 1 30); do curl -fsS http://127.0.0.1:7080/api/healthz >/dev/null && exit 0; sleep 1; done; exit 0'
-ExecStart=/bin/sh -c 'BROWSER=$(command -v chromium-browser || command -v chromium); exec /usr/bin/cage -s -- "$BROWSER" --kiosk --noerrdialogs --disable-infobars --disable-features=Translate,TranslateUI --no-first-run --no-default-browser-check --check-for-update-interval=31536000 --disable-pinch --overscroll-history-navigation=0 --autoplay-policy=no-user-gesture-required --lang=et-EE --accept-lang=et-EE,et --touch-events=enabled --user-data-dir=/var/lib/kohvrikapid-agent/chromium --window-size=720,1280 --window-position=0,0 --app=http://127.0.0.1:7080'
+# cog (WebKit kiosk browser) — sisseehitatud --hide-cursor ja pole translate UI-d
+ExecStart=/usr/bin/cage -s -- /usr/bin/cog --platform=wl --hide-cursor=on-idle --enable-touch=true --enable-fullscreen=true --user-agent="Kohvrikapid-Kiosk/1.0" http://127.0.0.1:7080
 Restart=always
 RestartSec=3
 TTYPath=/dev/tty7
