@@ -33,8 +33,13 @@ ensure_deps() {
 
   if [[ "$ENABLE_KIOSK" == "1" ]]; then
     echo "[1b/9] Paigaldan kioski paketid (chromium + cage + node)"
+    # Debian Trixie / uuem Pi OS -> chromium; Bookworm -> chromium-browser
+    local chromium_pkg="chromium"
+    if ! apt-cache show chromium &>/dev/null; then
+      chromium_pkg="chromium-browser"
+    fi
     apt-get install -y --no-install-recommends \
-      chromium-browser cage seatd \
+      "$chromium_pkg" cage seatd \
       nodejs npm
   fi
 }
