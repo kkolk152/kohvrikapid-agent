@@ -45,26 +45,23 @@
     <div class="absolute -bottom-40 right-0 h-80 w-80 rounded-full bg-violet-600/20 blur-3xl"></div>
   </div>
 
-  <header class="relative z-10 flex items-center justify-between px-8 py-5">
-    <div class="flex items-center gap-3">
-      <div class="grid size-10 place-items-center rounded-xl bg-white text-slate-900">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+  <header class="relative z-10 flex items-center justify-between px-5 py-3">
+    <div class="flex items-center gap-2">
+      <div class="grid size-8 place-items-center rounded-lg bg-white text-slate-900">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
           <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="2"/>
           <path d="M3 12h18M12 3v18" stroke="currentColor" stroke-width="2"/>
         </svg>
       </div>
-      <div>
-        <div class="text-base font-semibold tracking-tight">Kohvrikapid</div>
-        <div class="text-xs text-slate-400">{state.serial ?? '—'}</div>
-      </div>
+      <div class="text-sm font-semibold tracking-tight">Kohvrikapid</div>
     </div>
-    <div class="flex items-center gap-3 text-xs text-slate-400">
+    <div class="flex items-center gap-2 text-[10px] text-slate-400">
       <NetworkBadge network={state.network} />
       <span class="font-mono">{timeStr(now)}</span>
     </div>
   </header>
 
-  <div class="relative z-10 flex flex-1 items-center justify-center px-8 pb-8">
+  <div class="relative z-10 flex flex-1 items-center justify-center px-4 pb-4">
     {#if state.view === 'BOOTING'}
       <Booting />
     {:else if state.view === 'UNCLAIMED'}
