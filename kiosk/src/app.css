@@ -5,6 +5,12 @@
   font-feature-settings: 'cv11', 'ss03';
 }
 
-html, body, #app { height: 100%; margin: 0; padding: 0; overscroll-behavior: none; }
-* { -webkit-user-select: none; user-select: none; }
+html, body, #app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overscroll-behavior: none;
+  cursor: none !important;
+}
+* { -webkit-user-select: none; user-select: none; cursor: none !important; }
 ::-webkit-scrollbar { display: none; }
