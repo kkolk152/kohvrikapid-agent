@@ -1,0 +1,9 @@
+[Unit]
+Description=Run eth0-mode on eth0 carrier change
+
+[Path]
+PathChanged=/sys/class/net/eth0/carrier
+Unit=eth0-mode.service
+
+[Install]
+WantedBy=multi-user.target

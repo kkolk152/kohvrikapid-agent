@@ -13,6 +13,7 @@ from .client import AgentClient
 from .config import AgentConfig, AgentSecrets, read_or_create_serial
 from .display import claim_state, gather_network_info, ready_state, render_to_framebuffer
 from .hardware import gather_hardware_info, gather_telemetry, send_rs485_packet
+from . import discovery, network
 from .ota import apply_firmware
 
 logging.basicConfig(
@@ -150,14 +151,22 @@ def run() -> None:
     serial = secrets.serial or read_or_create_serial()
     hw_info = gather_hardware_info()
 
-    log.info("Kohvrikapid agent %s käivitub (serial=%s, server=%s)", __version__, serial, config.server_url)
+    display_on = config.resolve_display_enabled()
+    net_state = network.gather_network_state()
+    log.info(
+        "Kohvrikapid agent %s käivitub (serial=%s, server=%s, display=%s, network=%s)",
+        __version__, serial, config.server_url, "on" if display_on else "off", net_state.get("mode"),
+    )
+
+    last_discovery_ts = 0.0
+    discovery_period = max(60, config.discovery_interval_minutes * 60)
 
     with AgentClient(server_url=config.server_url) as client_:
         client = client_
         secrets = ensure_registered(client, secrets, serial, hw_info)
 
         # First display state
-        if config.display_enabled:
+        if display_on:
             render_to_framebuffer(claim_state(
                 serial=serial,
                 server_url=config.server_url,
@@ -168,8 +177,19 @@ def run() -> None:
 
         backoff = config.long_poll_retry_seconds
         while _running:
+            net_state = network.gather_network_state()
+            # Aeg-ajalt skaneerime aktiivset alamvõrku Kerong kontrollerite leidmiseks
+            if config.discovery_enabled and time.time() - last_discovery_ts > discovery_period:
+                try:
+                    discovery.scan_kerong(net_state.get("discovery_subnet"))
+                except Exception as e:
+                    log.warning("Discovery scan ebaõnnestus: %s", e)
+                last_discovery_ts = time.time()
+
             extra = {
                 "telemetry": gather_telemetry(),
+                "network": net_state,
+                "discovery": discovery.gather_discovery_state(net_state.get("discovery_subnet")),
             }
             try:
                 resp = client.long_poll(
@@ -196,7 +216,7 @@ def run() -> None:
             backoff = config.long_poll_retry_seconds
 
             # Update display based on paired state
-            if config.display_enabled:
+            if display_on:
                 cfg_part = resp.get("config", {})
                 if cfg_part.get("paired"):
                     render_to_framebuffer(ready_state(

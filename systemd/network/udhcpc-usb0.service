@@ -1,0 +1,9 @@
+[Unit]
+Description=udhcpc usb0 (4G primary, oneshot)
+After=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 30); do [ -e /sys/class/net/usb0 ] && exit 0; sleep 1; done; exit 0'
+ExecStart=/usr/local/sbin/run-udhcpc-usb0-once.sh

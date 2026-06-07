@@ -15,28 +15,54 @@ SERIAL_PATH = Path("/etc/kohvrikapid-agent/serial")
 
 @dataclass
 class AgentConfig:
-    server_url: str = "https://kohvrikapid.ee"
+    server_url: str = "https://ctr-locker.kakuweb.ee"
     long_poll_timeout: int = 30  # seconds — slightly higher than server's 25s
     long_poll_retry_seconds: int = 5
     firmware_install_command: str = "/opt/kohvrikapid-agent/bin/install-firmware.sh"
-    display_enabled: bool = True
+    # "auto" — vaatab /dev/fb0; "force_on" — alati renderda; "force_off" — headless
+    display_mode: str = "auto"
     serial_port: Optional[str] = None  # RS485 serial port for KR-BU/NCU* bridge
     serial_baud: int = 19200
+    # Discovery skaneerib kuni n hosti — kaitse vea/valesti seadistatud subneti vastu
+    discovery_enabled: bool = True
+    discovery_interval_minutes: int = 30
 
     @classmethod
     def load(cls) -> "AgentConfig":
         if not CONFIG_PATH.exists():
             return cls()
         data = tomllib.loads(CONFIG_PATH.read_text())
+        # Tagasiühilduvus: vana "display_enabled" → uus "display_mode"
+        display_mode = data.get("display_mode")
+        if display_mode is None:
+            legacy = data.get("display_enabled")
+            if legacy is True:
+                display_mode = "auto"
+            elif legacy is False:
+                display_mode = "force_off"
+            else:
+                display_mode = cls.display_mode
         return cls(
             server_url=data.get("server_url", cls.server_url),
             long_poll_timeout=int(data.get("long_poll_timeout", cls.long_poll_timeout)),
             long_poll_retry_seconds=int(data.get("long_poll_retry_seconds", cls.long_poll_retry_seconds)),
             firmware_install_command=data.get("firmware_install_command", cls.firmware_install_command),
-            display_enabled=bool(data.get("display_enabled", cls.display_enabled)),
+            display_mode=display_mode,
             serial_port=data.get("serial_port"),
             serial_baud=int(data.get("serial_baud", cls.serial_baud)),
+            discovery_enabled=bool(data.get("discovery_enabled", cls.discovery_enabled)),
+            discovery_interval_minutes=int(data.get("discovery_interval_minutes", cls.discovery_interval_minutes)),
         )
+
+    def resolve_display_enabled(self) -> bool:
+        """Lõplik otsus kas ekraani render aktiivne (võtab arvesse auto + /dev/fb0)."""
+        if self.display_mode == "force_on":
+            return True
+        if self.display_mode == "force_off":
+            return False
+        # auto
+        from .display import display_available
+        return display_available()
 
 
 @dataclass

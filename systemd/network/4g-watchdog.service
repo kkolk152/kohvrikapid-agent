@@ -1,0 +1,6 @@
+[Unit]
+Description=4G watchdog (auto reset usb0 if internet stalls)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/4g-watchdog.sh

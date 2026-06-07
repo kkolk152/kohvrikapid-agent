@@ -1,0 +1,6 @@
+[Unit]
+Description=Switch eth0 between LAN client and router-mode
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/eth0-mode.sh

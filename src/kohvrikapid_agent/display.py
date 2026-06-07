@@ -2,6 +2,7 @@
 from __future__ import annotations
 import json
 import logging
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -10,6 +11,25 @@ from typing import Optional
 log = logging.getLogger(__name__)
 
 STATE_PATH = Path("/var/lib/kohvrikapid-agent/display_state.json")
+FRAMEBUFFER_PATH = Path("/dev/fb0")
+
+
+def display_available() -> bool:
+    """Tuvasta kas Pi-l on füüsiline ekraan (framebuffer olemas ja avaneb).
+
+    Kasutatakse autodetect-iks: kaks Pi varianti (ekraaniga ja ilma)
+    jagavad sama agent koodi. Kui /dev/fb0 olemas ja avaneb (õigused dialout/video
+    grupi kaudu), siis renderdame; muidu agent jookseb headless.
+    """
+    if not FRAMEBUFFER_PATH.exists():
+        return False
+    try:
+        fd = os.open(str(FRAMEBUFFER_PATH), os.O_RDONLY | os.O_NONBLOCK)
+        os.close(fd)
+        return True
+    except OSError as e:
+        log.debug("Framebuffer olemas, aga ei avane: %s", e)
+        return False
 
 
 def write_state(state: dict) -> None:

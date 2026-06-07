@@ -1,0 +1,10 @@
+[Unit]
+Description=Run 4G watchdog periodically
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=60
+AccuracySec=1
+
+[Install]
+WantedBy=timers.target

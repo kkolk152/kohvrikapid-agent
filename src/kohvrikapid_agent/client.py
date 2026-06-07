@@ -24,6 +24,12 @@ class AgentClient:
     def close(self) -> None:
         self._http.close()
 
+    def __enter__(self) -> "AgentClient":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
+
     def _agent_headers(self) -> dict[str, str]:
         if not self.device_id or not self.agent_token:
             raise RuntimeError("Agent not registered — call register() first")

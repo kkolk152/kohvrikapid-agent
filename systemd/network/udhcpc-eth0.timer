@@ -1,0 +1,10 @@
+[Unit]
+Description=Run udhcpc-eth0 periodically
+
+[Timer]
+OnBootSec=10
+OnUnitActiveSec=300
+AccuracySec=5
+
+[Install]
+WantedBy=timers.target

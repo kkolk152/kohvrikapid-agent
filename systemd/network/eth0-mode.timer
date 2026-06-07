@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodic eth0-mode check
+
+[Timer]
+OnBootSec=15
+OnUnitActiveSec=20
+AccuracySec=1
+
+[Install]
+WantedBy=timers.target

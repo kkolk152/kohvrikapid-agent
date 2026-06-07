@@ -1,6 +1,6 @@
 [Unit]
 Description=Kohvrikapid Agent (Raspberry Pi side klient)
-After=network-online.target
+After=network-online.target udhcpc-usb0.service udhcpc-eth0.service
 Wants=network-online.target
 
 [Service]

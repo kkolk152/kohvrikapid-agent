@@ -13,7 +13,7 @@ CONFIG_DIR="/etc/kohvrikapid-agent"
 STATE_DIR="/var/lib/kohvrikapid-agent"
 LOG_DIR="/var/log/kohvrikapid-agent"
 SERVICE_USER="kohvrikapid"
-SERVER_URL_DEFAULT="${SERVER_URL:-https://kohvrikapid.ee}"
+SERVER_URL_DEFAULT="${SERVER_URL:-https://ctr-locker.kakuweb.ee}"
 
 require_root() {
   if [[ $EUID -ne 0 ]]; then
@@ -23,24 +23,28 @@ require_root() {
 }
 
 ensure_deps() {
-  echo "[1/6] Paigaldan Debiani paketid"
+  echo "[1/7] Paigaldan Debiani paketid"
   apt-get update -qq
   apt-get install -y --no-install-recommends \
-    python3 python3-venv python3-pip git ca-certificates curl
+    python3 python3-venv python3-pip git ca-certificates curl \
+    busybox dnsmasq nftables usb-modeswitch udev iproute2 iputils-ping
+  # NB: NetworkManager/ModemManager/dhcpcd-d EI paigalda — me kasutame
+  # busybox udhcpc-d + custom systemd unit-eid (vt scripts/network/).
+  # Vt network-bootstrap.sh, mis nad keelab/maskib paigalduse ajal.
 }
 
 ensure_user() {
   if ! id "$SERVICE_USER" &>/dev/null; then
-    echo "[2/6] Loon kasutaja $SERVICE_USER"
+    echo "[2/7] Loon kasutaja $SERVICE_USER"
     useradd --system --no-create-home --shell /usr/sbin/nologin "$SERVICE_USER"
   else
-    echo "[2/6] Kasutaja $SERVICE_USER on juba olemas"
+    echo "[2/7] Kasutaja $SERVICE_USER on juba olemas"
   fi
-  usermod -aG dialout,gpio,video "$SERVICE_USER" || true
+  usermod -aG dialout,gpio,video,netdev "$SERVICE_USER" || true
 }
 
 clone_or_update() {
-  echo "[3/6] Tarkvara ${INSTALL_DIR}"
+  echo "[3/7] Tarkvara ${INSTALL_DIR}"
   if [[ -d "$INSTALL_DIR/.git" ]]; then
     git -C "$INSTALL_DIR" fetch --quiet
     git -C "$INSTALL_DIR" reset --hard origin/main --quiet
@@ -51,7 +55,7 @@ clone_or_update() {
 }
 
 install_venv() {
-  echo "[4/6] Python venv + sõltuvused"
+  echo "[4/7] Python venv + sõltuvused"
   if [[ ! -d "$INSTALL_DIR/.venv" ]]; then
     python3 -m venv "$INSTALL_DIR/.venv"
   fi
@@ -60,7 +64,7 @@ install_venv() {
 }
 
 write_config() {
-  echo "[5/6] Konfiguratsioon $CONFIG_DIR"
+  echo "[5/7] Konfiguratsioon $CONFIG_DIR"
   mkdir -p "$CONFIG_DIR" "$STATE_DIR" "$LOG_DIR"
   chown -R "$SERVICE_USER:$SERVICE_USER" "$CONFIG_DIR" "$STATE_DIR" "$LOG_DIR"
   chmod 750 "$CONFIG_DIR" "$STATE_DIR"
@@ -71,7 +75,10 @@ server_url = "$SERVER_URL_DEFAULT"
 long_poll_timeout = 30
 long_poll_retry_seconds = 5
 firmware_install_command = "/opt/kohvrikapid-agent/bin/install-firmware.sh"
-display_enabled = true
+# display_mode: "auto" (vaatab /dev/fb0), "force_on", "force_off"
+display_mode = "auto"
+discovery_enabled = true
+discovery_interval_minutes = 30
 # serial_port = "/dev/ttyUSB0"   # ava kui RS485 dongl
 # serial_baud = 19200
 EOF
@@ -80,8 +87,15 @@ EOF
   fi
 }
 
+install_network_bootstrap() {
+  echo "[6/7] Network bootstrap (udhcpc usb0/eth0 + dnsmasq + nft NAT)"
+  # network-bootstrap.sh paigaldab kõik /usr/local/sbin skriptid,
+  # systemd unit-id, dnsmasq drop-in ja keelab konkureerivad daemonid.
+  INSTALL_DIR="$INSTALL_DIR" bash "$INSTALL_DIR/scripts/network-bootstrap.sh"
+}
+
 install_service() {
-  echo "[6/6] systemd unit"
+  echo "[7/7] systemd unit"
   install -m 644 "$INSTALL_DIR/systemd/kohvrikapid-agent.service" /etc/systemd/system/
   install -d -m 755 /opt/kohvrikapid-agent/bin
   install -m 755 "$INSTALL_DIR/scripts/install-firmware.sh" /opt/kohvrikapid-agent/bin/install-firmware.sh
@@ -97,6 +111,7 @@ ensure_user
 clone_or_update
 install_venv
 write_config
+install_network_bootstrap
 install_service
 
 cat <<EOF
