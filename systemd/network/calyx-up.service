@@ -8,3 +8,6 @@ Type=oneshot
 ExecStartPre=/bin/sleep 25
 ExecStart=/usr/local/sbin/calyx-up.sh
 TimeoutStartSec=180
+
+[Install]
+WantedBy=multi-user.target
