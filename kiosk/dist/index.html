@@ -198,6 +198,47 @@
 
 
 <script>
+// Free-mode router intercept: kui kapi sätetes payment.free_mode=true, jätame
+// PaymentPage vahele ja suuname otse PIN-i loomisele. React Router v6 kasutab
+// history.pushState — intercept-ime selle ja muudame /payment → /create-pin.
+(function () {
+  window.__FREE_MODE__ = false;
+  fetch("/api/state", { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : {}; }).then(function (s) {
+    window.__FREE_MODE__ = !!(s && s.payment && s.payment.free_mode);
+  }).catch(function () {});
+
+  function rewrite(url) {
+    if (!window.__FREE_MODE__ || typeof url !== "string") return url;
+    if (url === "/payment" || url.indexOf("/payment?") === 0 || url.indexOf("/payment#") === 0) {
+      return "/create-pin" + url.slice("/payment".length);
+    }
+    return url;
+  }
+  var origPush = history.pushState;
+  history.pushState = function (state, title, url) {
+    var fixed = rewrite(url);
+    // Free mode injects paidAmount=0 + transactionId="free" into router state,
+    // et PinCreatePage ei kukuks undefined-st kokku.
+    if (fixed !== url && state && typeof state === "object") {
+      try {
+        var st = state.state || state.usr || {};
+        if (st && typeof st === "object") {
+          if (st.totalPrice == null) st.totalPrice = 0;
+          if (st.paidAmount == null) st.paidAmount = 0;
+          if (!st.transactionId) st.transactionId = "free-" + Date.now();
+        }
+      } catch (e) {}
+    }
+    return origPush.call(this, state, title, fixed);
+  };
+  var origReplace = history.replaceState;
+  history.replaceState = function (state, title, url) {
+    return origReplace.call(this, state, title, rewrite(url));
+  };
+})();
+</script>
+
+<script>
 // Tenant-state watcher: kui contact_phone v tenant_name muutub /api/state-is,
 // reload chromium et JS bundle patcher saaks uue väärtuse sisestada.
 (function () {
