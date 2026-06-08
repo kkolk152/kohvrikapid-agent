@@ -20,7 +20,7 @@ from . import network
 
 log = logging.getLogger(__name__)
 
-KERONG_PORT = 4001
+KERONG_PORTS = (4001, 4196)  # ZNE-100TL+ kasutab 4196, vanemad mudelid 4001
 CONNECT_TIMEOUT = 0.3  # sekund per host
 SCAN_WORKERS = 32
 CACHE_TTL_SECONDS = 300
@@ -57,15 +57,19 @@ def scan_kerong(subnet_cidr: Optional[str] = None, force: bool = False) -> list[
     hosts = [str(ip) for ip in net.hosts()]
     hits: list[dict] = []
     log.info("Kerong discovery alustab — subnet=%s hosti-arv=%d", subnet_cidr, len(hosts))
+    # Probe iga host iga teadaoleva pordi suhtes (4001 vanad, 4196 ZNE-100TL+)
     with concurrent.futures.ThreadPoolExecutor(max_workers=SCAN_WORKERS) as ex:
-        futures = {ex.submit(_check_port, ip, KERONG_PORT): ip for ip in hosts}
+        futures = {}
+        for ip in hosts:
+            for port in KERONG_PORTS:
+                futures[ex.submit(_check_port, ip, port)] = (ip, port)
         for fut in concurrent.futures.as_completed(futures):
-            ip = futures[fut]
+            ip, port = futures[fut]
             try:
                 if fut.result():
-                    hits.append({"ip": ip, "port": KERONG_PORT, "scanned_at": time.time()})
+                    hits.append({"ip": ip, "port": port, "scanned_at": time.time()})
             except Exception as e:
-                log.debug("Skaneerimise viga %s: %s", ip, e)
+                log.debug("Skaneerimise viga %s:%s: %s", ip, port, e)
 
     _cache.update({"ts": now, "subnet": subnet_cidr, "hits": hits})
     log.info("Kerong discovery valmis — leitud %d hosti", len(hits))

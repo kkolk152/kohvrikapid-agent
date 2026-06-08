@@ -99,6 +99,8 @@ def handle_command(client: AgentClient, cmd: dict, config: AgentConfig) -> None:
             result.update(_query_status(payload, config))
         elif action == "lock_raw":
             result.update(_send_raw(payload, config))
+        elif action == "query_locks":
+            result.update(_query_locks(payload, config))
         elif action == "sync_stock":
             result["note"] = "no-op (stock state read on demand)"
         elif action == "reboot":
@@ -122,12 +124,68 @@ def handle_command(client: AgentClient, cmd: dict, config: AgentConfig) -> None:
 
 
 def _open_slot(payload: dict, config: AgentConfig) -> dict:
+    transport = payload.get("transport") or ("rs485_direct" if payload.get("raw_hex") else "gpio")
+    if transport == "kr_bu":
+        return _open_slot_via_kr_bu(payload)
+    if transport == "rs485_direct":
+        raw_hex = payload.get("raw_hex")
+        if raw_hex and config.serial_port:
+            reply = send_rs485_packet(config.serial_port, config.serial_baud, raw_hex)
+            return {"transport": "rs485_direct", "raw_reply_hex": reply.hex(" ") if reply else None}
+        return {"transport": "rs485_direct", "error": "no serial_port or raw_hex"}
+    # gpio (relay): pulse a GPIO pin for unlock_ms milliseconds
+    return _open_slot_via_gpio(payload)
+
+
+def _open_slot_via_gpio(payload: dict) -> dict:
+    pin = payload.get("gpio_pin")
+    unlock_ms = int(payload.get("unlock_ms") or 550)
+    if not isinstance(pin, int) or pin < 0:
+        return {"transport": "gpio", "error": "no gpio_pin in payload"}
+    try:
+        import gpiod  # type: ignore  # Pi 5 — libgpiod v2
+        with gpiod.request_lines(
+            "/dev/gpiochip0",
+            consumer="kohvrikapid-agent",
+            config={pin: gpiod.LineSettings(direction=gpiod.line.Direction.OUTPUT, output_value=gpiod.line.Value.ACTIVE)},
+        ) as req:
+            import time as _t
+            _t.sleep(unlock_ms / 1000.0)
+            req.set_value(pin, gpiod.line.Value.INACTIVE)
+        return {"transport": "gpio", "pin": pin, "pulsed_ms": unlock_ms}
+    except ImportError:
+        log.warning("gpiod puudub — paigalda python3-gpiod")
+        return {"transport": "gpio", "error": "gpiod not installed"}
+    except Exception as e:
+        log.error("GPIO pulse ebaõnnestus: %s", e)
+        return {"transport": "gpio", "error": str(e)}
+
+
+def _open_slot_via_kr_bu(payload: dict) -> dict:
+    host = payload.get("bridge_host")
+    port = int(payload.get("bridge_port") or 4196)
     raw_hex = payload.get("raw_hex")
-    if raw_hex and config.serial_port:
-        reply = send_rs485_packet(config.serial_port, config.serial_baud, raw_hex)
-        return {"raw_reply_hex": reply.hex(" ") if reply else None}
-    # TODO: GPIO relay-pin pulse for non-NCU setups
-    return {"note": "no serial_port configured — open_slot is no-op"}
+    if not host or not raw_hex:
+        return {"transport": "kr_bu", "error": "missing bridge_host or raw_hex"}
+    try:
+        import socket
+        bytes_to_send = bytes(int(b, 16) for b in raw_hex.split() if b)
+        # NB: KR-BU TCP klient — FINALLY close (vt platform_phase19 memo)
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.settimeout(3.0)
+            s.connect((host, port))
+            s.sendall(bytes_to_send)
+            try:
+                reply = s.recv(64)
+            except socket.timeout:
+                reply = b""
+        finally:
+            s.close()
+        return {"transport": "kr_bu", "raw_reply_hex": reply.hex(" ") if reply else None}
+    except Exception as e:
+        log.error("KR-BU saatmine ebaõnnestus: %s", e)
+        return {"transport": "kr_bu", "error": str(e)}
 
 
 def _query_status(payload: dict, config: AgentConfig) -> dict:
@@ -144,6 +202,58 @@ def _send_raw(payload: dict, config: AgentConfig) -> dict:
         return {"error": "raw_hex or serial_port missing"}
     reply = send_rs485_packet(config.serial_port, config.serial_baud, raw_hex)
     return {"raw_reply_hex": reply.hex(" ") if reply else None}
+
+
+def _query_locks(payload: dict, config: AgentConfig) -> dict:
+    """Saada NCU broadcast STATUS query (ADDR=0x00..0x0F või 0x64=kõik) ja
+    loenda vastused. Tagastab leitud luku-numbrite listi.
+
+    Payload: {"address": 0, "max_locks": 48}. Kui address puudub, saadame
+    broadcasti.
+    """
+    address = int(payload.get("address", 0)) & 0xFF
+    max_locks = int(payload.get("max_locks", 48))
+    transport = payload.get("transport") or "rs485_direct"
+    bridge_host = payload.get("bridge_host")
+    bridge_port = int(payload.get("bridge_port") or 4196)
+    found: list[int] = []
+
+    def _send(frame_hex: str) -> bytes:
+        if transport == "kr_bu" and bridge_host:
+            try:
+                import socket
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                try:
+                    s.settimeout(2.0)
+                    s.connect((bridge_host, bridge_port))
+                    s.sendall(bytes(int(b, 16) for b in frame_hex.split() if b))
+                    return s.recv(256) or b""
+                finally:
+                    s.close()
+            except Exception as e:
+                log.debug("KR-BU query: %s", e)
+                return b""
+        if config.serial_port:
+            reply = send_rs485_packet(config.serial_port, config.serial_baud, frame_hex)
+            return reply or b""
+        return b""
+
+    # Käime üks-üks läbi 1..max_locks; lukk vastab status query-le (CMD=0x80)
+    cmd = 0x80
+    for lock_idx in range(max_locks):
+        stx, etx, ask, datalen = 0x02, 0x03, 0x00, 0x00
+        chk = (stx + address + lock_idx + cmd + ask + datalen + etx) & 0xFF
+        frame = " ".join(f"{b:02x}" for b in (stx, address, lock_idx, cmd, ask, datalen, etx, chk))
+        reply = _send(frame)
+        # Vastus algab 0x02 ja LOCKNUM peab klappima
+        if len(reply) >= 8 and reply[0] == 0x02 and reply[2] == lock_idx and reply[4] in (0x10, 0x11):
+            found.append(lock_idx + 1)  # tagasi 1-based
+    return {
+        "address": address,
+        "found_locks": found,
+        "count": len(found),
+        "transport": transport,
+    }
 
 
 def run() -> None:

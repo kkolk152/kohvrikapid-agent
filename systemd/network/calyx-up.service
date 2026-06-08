@@ -1,0 +1,10 @@
+[Unit]
+Description=Bring up CALYX RNDIS usb0 + DHCP (safe)
+After=systemd-udev-settle.service
+Wants=systemd-udev-settle.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/sleep 25
+ExecStart=/usr/local/sbin/calyx-up.sh
+TimeoutStartSec=180

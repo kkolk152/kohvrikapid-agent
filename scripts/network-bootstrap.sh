@@ -34,6 +34,7 @@ install -m 755 "$SRC_NET_DIR/udhcpc-usb0-hook.sh"      /usr/local/sbin/udhcpc-us
 install -m 755 "$SRC_NET_DIR/udhcpc-eth0-hook.sh"      /usr/local/sbin/udhcpc-eth0-hook.sh
 install -m 755 "$SRC_NET_DIR/eth0-mode.sh"             /usr/local/sbin/eth0-mode.sh
 install -m 755 "$SRC_NET_DIR/4g-watchdog.sh"           /usr/local/sbin/4g-watchdog.sh
+install -m 755 "$SRC_NET_DIR/calyx-up.sh"              /usr/local/sbin/calyx-up.sh
 
 log "Paigaldan systemd unit-id"
 install -m 644 "$SRC_UNIT_DIR/udhcpc-usb0.service"  /etc/systemd/system/udhcpc-usb0.service
@@ -45,6 +46,7 @@ install -m 644 "$SRC_UNIT_DIR/eth0-mode.timer"      /etc/systemd/system/eth0-mod
 install -m 644 "$SRC_UNIT_DIR/eth0-mode.path"       /etc/systemd/system/eth0-mode.path
 install -m 644 "$SRC_UNIT_DIR/4g-watchdog.service"  /etc/systemd/system/4g-watchdog.service
 install -m 644 "$SRC_UNIT_DIR/4g-watchdog.timer"    /etc/systemd/system/4g-watchdog.timer
+install -m 644 "$SRC_UNIT_DIR/calyx-up.service"     /etc/systemd/system/calyx-up.service
 
 log "Paigaldan dnsmasq drop-in"
 install -d -m 755 /etc/dnsmasq.d
@@ -65,8 +67,10 @@ systemctl enable --now udhcpc-eth0.timer
 systemctl enable --now eth0-mode.timer
 systemctl enable --now eth0-mode.path
 systemctl enable --now 4g-watchdog.timer
+systemctl enable calyx-up.service || true
 
 # Esimene käivitus kohe
+systemctl start calyx-up.service || true
 systemctl start udhcpc-usb0.service || true
 systemctl start eth0-mode.service || true
 

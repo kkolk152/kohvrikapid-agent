@@ -66,7 +66,7 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
             view = state.get("view")
             phone = state.get("contact_phone")
             tenant = state.get("tenant_name")
-            ready = (
+            ready = bool(
                 view == "READY"
                 and isinstance(phone, str) and phone
                 and isinstance(tenant, str) and tenant
@@ -123,6 +123,34 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
         slot_count = state.get("slot_count")
         if isinstance(slot_count, int) and slot_count > 0:
             content = self._patch_locker_array(content, slot_count)
+
+        # 5) Reference Pi UI helistab localhost:9122 (NCU48L locker-control), :9131
+        # (kiosk-sms-center) jne. Need meil pole — suuname kõik kioski same-origin-i
+        # peale, kus me proxime relevant endpoint-id platformi-le.
+        content = content.replace('"http://127.0.0.1:9122"', '""')
+        content = content.replace('"http://127.0.0.1:9131"', '""')
+
+        # 6) Hinnastus + makse: tasuta režiim ja per-cabinet hinnatabel
+        payment = state.get("payment") or {}
+        pricing = state.get("pricing") or {}
+        tiers = pricing.get("tiers") if isinstance(pricing, dict) else None
+        if isinstance(tiers, list) and tiers:
+            # SIZE_PRICES tabeli asendus. Reference: const SIZE_PRICES={S:{6:3,24:6},M:...}
+            # Minified bundle-is on selliselt: {S:{6:3,24:6},M:{6:3,24:6},L:{6:4,24:8},XL:{6:5,24:10}}
+            # Genereeri identne struktuur uute tier-ide järgi (sama hind kõikidele sizes).
+            def _mk(size_mult: float) -> str:
+                inner = ",".join(
+                    f"{int(t.get('hours', 0))}:{round(float(t.get('price', 0)) * size_mult, 2)}"
+                    for t in tiers if isinstance(t, dict)
+                )
+                return "{" + inner + "}"
+            old_table = "{S:{6:3,24:6},M:{6:3,24:6},L:{6:4,24:8},XL:{6:5,24:10}}"
+            new_table = "{S:" + _mk(1.0) + ",M:" + _mk(1.0) + ",L:" + _mk(1.3) + ",XL:" + _mk(1.7) + "}"
+            content = content.replace(old_table, new_table)
+
+        # 7) Free mode: kui makset pole, surume DurationPage onPay otse PinCreate-le.
+        # Praegu jätame UI muutmata — bundle PaymentPage'i refaktoreerimine on too
+        # invasive. Asemel: backend ignoreerib paid_amount free_mode case-is.
 
         body = content.encode("utf-8")
         self.send_response(200)
@@ -212,10 +240,45 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/storage/verify-pin":
             self._proxy_storage_verify_pin()
             return
+        if self.path == "/api/storage/start":
+            self._proxy_storage_start()
+            return
+        # Reference Pi locker-control shim endpoints — JS bundle helistab nendele
+        # samm-sammult avamise voos. Kõik lähevad lihtsalt 200/ok, kuni reaalne
+        # avamine toimub backend-i poolt (open_slot command long-polli kaudu).
+        if self.path in ("/open", "/sessions", "/sessions/close", "/probe"):
+            self._send_json({"ok": True, "note": "platform-side open"})
+            return
         self.send_response(404)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
         self.wfile.write(b'{"error":"not_found"}')
+
+    def _proxy_storage_start(self) -> None:
+        length = int(self.headers.get("Content-Length") or 0)
+        body_raw = self.rfile.read(length) if length > 0 else b"{}"
+        try:
+            body = json.loads(body_raw)
+        except json.JSONDecodeError:
+            self._send_json({"ok": False, "error": "bad_json"}, status=400)
+            return
+        config = AgentConfig.load()
+        secrets = AgentSecrets.load()
+        if not secrets.device_id or not secrets.agent_token:
+            self._send_json({"ok": False, "error": "agent_not_registered"}, status=503)
+            return
+        url = f"{config.server_url.rstrip('/')}/api/agent/v1/storage/start"
+        headers = {
+            "X-Device-Id": secrets.device_id,
+            "Authorization": f"Bearer {secrets.agent_token}",
+            "Content-Type": "application/json",
+        }
+        try:
+            r = httpx.post(url, json=body, headers=headers, timeout=15)
+            self._send_json(r.json(), status=r.status_code)
+        except Exception as e:
+            log.error("storage/start proxy ebaõnnestus: %s", e)
+            self._send_json({"ok": False, "error": f"network: {e}"}, status=502)
 
     def _proxy_storage_verify_pin(self) -> None:
         """Edasta PIN platformi /api/agent/v1/storage/verify-pin endpoint-ile."""
