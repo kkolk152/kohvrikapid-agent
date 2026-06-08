@@ -26,6 +26,8 @@ ExecStartPre=/bin/sh -c 'for i in $(seq 1 30); do curl -fsS http://127.0.0.1:708
 ExecStartPre=/bin/sh -c 'mkdir -p /var/lib/kohvrikapid-agent/chromium/Default && echo "{\"translate\":{\"enabled\":false},\"translate_blocked_languages\":[\"et\",\"en\",\"ru\",\"fi\"],\"translate_accepted_count\":{},\"translate_denied_count\":{},\"profile\":{\"default_content_setting_values\":{\"notifications\":2}}}" > /var/lib/kohvrikapid-agent/chromium/Default/Preferences'
 # Loo nähtamatu XCursor teema (1x1 transparent pixel) et peita hiir
 ExecStartPre=/usr/bin/python3 /opt/kohvrikapid-agent/scripts/create-invisible-cursor.py
+# Chrome Enterprise policy: keela translate prompt — '+' prefix = root
+ExecStartPre=+/bin/sh -c 'mkdir -p /etc/chromium/policies/managed && echo "{\"TranslateEnabled\":false}" > /etc/chromium/policies/managed/no_translate.json'
 # Chromium kiosk — cog/WPE 2.48 läks katki pärast reboot, chromium töötab kindlasti
 ExecStart=/bin/sh -c 'BROWSER=$(command -v chromium-browser || command -v chromium); exec /usr/bin/cage -s -- "$BROWSER" --kiosk --noerrdialogs --disable-infobars --no-first-run --no-default-browser-check --disable-pinch --overscroll-history-navigation=0 --touch-events=enabled --user-data-dir=/var/lib/kohvrikapid-agent/chromium --window-size=720,1280 http://127.0.0.1:7080'
 Restart=always
