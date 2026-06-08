@@ -1,683 +1,245 @@
-<!doctype html>
-<html lang="et">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=720, initial-scale=1.0, user-scalable=no" />
-<title>Kohvrikapid</title>
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; cursor: none !important; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
-  html, body, #app { height: 100%; width: 100%; overflow: hidden; }
-  body {
-    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: #ffffff; color: #0f172a;
-    -webkit-font-smoothing: antialiased;
-  }
-  button { font-family: inherit; border: 0; background: transparent; color: inherit; }
-  ::-webkit-scrollbar { display: none; }
-  svg { display: block; }
 
-  #app { display: flex; flex-direction: column; height: 100%; }
-  .page { display: none; flex: 1; flex-direction: column; height: 100%; overflow: hidden; }
-  .page.active { display: flex; }
-
-  /* ===== HERO header (HOME) ===== */
-  .hero {
-    background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
-    color: white;
-    padding: 64px 24px 56px;
-    text-align: center;
-    flex-shrink: 0;
-    position: relative;
-    overflow: hidden;
-  }
-  .hero::before {
-    content: ''; position: absolute; top: -60px; right: -40px;
-    width: 200px; height: 200px; border-radius: 9999px;
-    background: rgba(255,255,255,0.08);
-  }
-  .hero::after {
-    content: ''; position: absolute; bottom: -50px; left: -40px;
-    width: 180px; height: 180px; border-radius: 9999px;
-    background: rgba(255,255,255,0.06);
-  }
-  .hero > * { position: relative; z-index: 1; }
-
-  .logo-card {
-    display: inline-flex; align-items: center; gap: 14px;
-    background: white;
-    padding: 18px 28px; border-radius: 22px;
-    box-shadow: 0 16px 40px -10px rgba(0,0,0,0.3), 0 8px 16px -4px rgba(0,0,0,0.15);
-    margin-bottom: 30px;
-  }
-  .logo-card .icon {
-    width: 44px; height: 44px;
-    background: linear-gradient(135deg, #2563eb, #1e40af);
-    border-radius: 12px;
-    display: grid; place-items: center;
-  }
-  .logo-card .icon svg { width: 26px; height: 26px; }
-  .logo-card .wordmark {
-    display: flex; flex-direction: column; align-items: flex-start;
-    line-height: 1;
-  }
-  .logo-card .wordmark .name {
-    font-size: 22px; font-weight: 900; color: #0f172a; letter-spacing: -0.02em;
-  }
-  .logo-card .wordmark .tag {
-    font-size: 10px; font-weight: 700; color: #64748b;
-    letter-spacing: 0.15em; text-transform: uppercase; margin-top: 4px;
-  }
-
-  .hero h1 {
-    font-size: 44px; font-weight: 900; letter-spacing: -0.025em; line-height: 1.05;
-    margin-bottom: 14px;
-  }
-  .hero .sub {
-    color: #dbeafe; font-size: 19px; font-weight: 500; line-height: 1.4;
-    max-width: 480px; margin: 0 auto;
-  }
-
-  .lang-pill {
-    display: inline-flex; gap: 6px; margin-top: 32px;
-    padding: 6px; border-radius: 9999px; background: rgba(0,0,0,0.18);
-    backdrop-filter: blur(8px);
-  }
-  .lang-pill button {
-    padding: 12px 22px; border-radius: 9999px;
-    font-size: 15px; font-weight: 800; letter-spacing: 0.04em;
-    color: white; transition: all 0.2s;
-  }
-  .lang-pill button.active {
-    background: white; color: #1d4ed8;
-    box-shadow: 0 6px 14px -4px rgba(0,0,0,0.3);
-    transform: scale(1.05);
-  }
-
-  /* Sub-header for inner pages */
-  .sub-header {
-    background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
-    color: white; padding: 22px 18px 26px;
-    display: flex; align-items: center; gap: 14px; flex-shrink: 0;
-  }
-  .sub-header .back-btn {
-    width: 52px; height: 52px; border-radius: 16px;
-    background: rgba(255,255,255,0.18); display: grid; place-items: center;
-    flex-shrink: 0;
-  }
-  .sub-header .back-btn svg { width: 28px; height: 28px; }
-  .sub-header .title-block { flex: 1; }
-  .sub-header .title-block .t { font-size: 26px; font-weight: 900; line-height: 1.1; }
-  .sub-header .title-block .s { font-size: 14px; color: #bfdbfe; margin-top: 4px; font-weight: 500; }
-
-  /* ===== Main action buttons (home) ===== */
-  .actions {
-    flex: 1; display: flex; flex-direction: column;
-    padding: 32px 22px 16px; gap: 22px;
-  }
-  .action-btn {
-    width: 100%; height: 160px; border-radius: 32px;
-    color: white; display: flex; align-items: center;
-    padding: 0 24px; gap: 22px;
-    box-shadow: 0 24px 28px -10px rgba(15,23,42,0.22), 0 10px 14px -8px rgba(15,23,42,0.1);
-    transition: transform 0.12s, box-shadow 0.12s;
-    position: relative;
-    overflow: hidden;
-  }
-  .action-btn::after {
-    content: ''; position: absolute; top: 0; right: -30px;
-    width: 140px; height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08));
-    pointer-events: none;
-  }
-  .action-btn:active {
-    transform: scale(0.97);
-    box-shadow: 0 12px 20px -8px rgba(15,23,42,0.22);
-  }
-  .action-btn .ico-box {
-    background: rgba(255,255,255,0.25);
-    padding: 18px; border-radius: 22px;
-    flex-shrink: 0;
-    backdrop-filter: blur(8px);
-  }
-  .action-btn .ico-box svg { width: 56px; height: 56px; }
-  .action-btn .label-block {
-    display: flex; flex-direction: column; align-items: flex-start;
-    text-align: left; line-height: 1.1;
-  }
-  .action-btn .label-block .l {
-    font-size: 30px; font-weight: 900; text-transform: uppercase;
-    letter-spacing: -0.01em;
-  }
-  .action-btn .label-block .s {
-    font-size: 14px; font-weight: 600; opacity: 0.88; margin-top: 6px;
-  }
-  .action-btn.green { background: linear-gradient(180deg, #22c55e 0%, #15803d 100%); }
-  .action-btn.blue  { background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%); }
-
-  .ghost-action {
-    margin: 0 22px 14px; height: 100px;
-    background: white; border: 3px solid #bfdbfe; border-radius: 26px;
-    color: #1d4ed8; display: flex; align-items: center;
-    padding: 0 20px; gap: 16px;
-    box-shadow: 0 10px 24px -8px rgba(15,23,42,0.08);
-    transition: transform 0.12s;
-  }
-  .ghost-action:active { transform: scale(0.98); }
-  .ghost-action .ico-box { background: #dbeafe; padding: 14px; border-radius: 18px; flex-shrink: 0; }
-  .ghost-action .ico-box svg { width: 30px; height: 30px; }
-  .ghost-action .label-block { display: flex; flex-direction: column; align-items: flex-start; text-align: left; line-height: 1.1; }
-  .ghost-action .label-block .l { font-size: 18px; font-weight: 900; text-transform: uppercase; letter-spacing: -0.005em; }
-  .ghost-action .label-block .s { font-size: 12px; color: #3b82f6; font-weight: 700; margin-top: 5px; }
-
-  .help-btn {
-    margin: 4px 22px 14px; height: 60px;
-    background: #f1f5f9; color: #475569;
-    border-radius: 20px;
-    font-size: 14px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
-    transition: background 0.15s;
-    display: flex; align-items: center; justify-content: center; gap: 10px;
-  }
-  .help-btn:active { background: #e2e8f0; }
-  .help-btn svg { width: 20px; height: 20px; }
-
-  /* ===== PIN entry ===== */
-  .pin-page-body {
-    flex: 1; display: flex; flex-direction: column;
-    padding: 32px 24px 24px; gap: 24px;
-    overflow: hidden;
-  }
-  .pin-display {
-    display: flex; gap: 12px; justify-content: center;
-  }
-  .pin-dot {
-    width: 52px; height: 68px; border-radius: 16px;
-    border: 3px solid #e2e8f0; background: white;
-    display: grid; place-items: center;
-    font-size: 32px; font-weight: 900; color: #cbd5e1;
-    transition: all 0.15s;
-  }
-  .pin-dot.filled { border-color: #2563eb; background: #eff6ff; color: #2563eb; }
-
-  .status-msg { min-height: 36px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; }
-  .status-msg.checking { color: #64748b; }
-  .status-msg.error { background: #fee2e2; color: #b91c1c; border-radius: 12px; padding: 10px 22px; }
-
-  .keypad {
-    width: 100%; max-width: 400px; align-self: center;
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
-  }
-  .key {
-    height: 82px; border-radius: 24px;
-    background: white; border: 3px solid #f1f5f9;
-    box-shadow: 0 4px 8px -1px rgba(15,23,42,0.08);
-    font-size: 36px; font-weight: 900; color: #0f172a;
-    transition: transform 0.08s, background 0.08s, border-color 0.08s, color 0.08s;
-  }
-  .key:active:not(:disabled) {
-    transform: scale(0.94);
-    background: #2563eb; color: white; border-color: #1d4ed8;
-  }
-  .key:disabled { opacity: 0.25; }
-  .key.back svg { width: 32px; height: 32px; }
-  .key.back:active:not(:disabled) { background: #dc2626; border-color: #b91c1c; color: white; }
-  .key-empty {}
-
-  /* ===== SUCCESS / OPENING ===== */
-  .centered-page {
-    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 28px; padding: 24px; text-align: center;
-  }
-  .spinner-big {
-    width: 100px; height: 100px; border-radius: 9999px;
-    border: 8px solid #e2e8f0; border-top-color: #2563eb;
-    animation: spin 1s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .check-circle {
-    width: 150px; height: 150px; border-radius: 9999px;
-    background: linear-gradient(135deg, #10b981, #047857);
-    box-shadow: 0 24px 48px -10px rgba(16,185,129,0.4);
-    display: grid; place-items: center;
-    animation: pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
-  @keyframes pop {
-    0% { transform: scale(0.3); opacity: 0; }
-    100% { transform: scale(1); opacity: 1; }
-  }
-  .check-circle svg { width: 80px; height: 80px; }
-  .big-heading { font-size: 36px; font-weight: 900; color: #0f172a; line-height: 1.15; }
-  .big-heading .accent { color: #2563eb; }
-  .big-sub { font-size: 18px; color: #64748b; font-weight: 600; max-width: 320px; }
-
-  /* ===== UNCLAIMED + BOOTING ===== */
-  .booting-page, .unclaimed-page { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 24px; text-align: center; }
-  .badge {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 8px 16px; border-radius: 9999px;
-    font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
-    background: #fef3c7; color: #92400e;
-  }
-  .badge .dot { width: 7px; height: 7px; border-radius: 9999px; background: #f59e0b; animation: pulse 2s infinite; }
-  @keyframes pulse { 50% { opacity: 0.4; } }
-  .serial-card {
-    background: #f1f5f9; border: 2px solid #e2e8f0;
-    border-radius: 22px; padding: 20px 28px; max-width: 380px; width: 100%;
-  }
-  .serial-card .lbl { font-size: 11px; font-weight: 800; color: #64748b; letter-spacing: 0.1em; text-transform: uppercase; }
-  .serial-card .val { margin-top: 6px; font-family: ui-monospace, monospace; font-size: 24px; font-weight: 900; color: #0f172a; }
-
-  /* Footer */
-  .footer {
-    flex-shrink: 0; padding: 8px 16px; border-top: 1px solid #f1f5f9;
-    display: flex; align-items: center; justify-content: space-between;
-    font-size: 10px; color: #94a3b8; font-family: ui-monospace, monospace;
-  }
-  .net-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 8px; background: #f8fafc; }
-  .net-pill .dot { width: 6px; height: 6px; border-radius: 9999px; background: #10b981; }
-  .debug { color: #cbd5e1; }
-</style>
-</head>
-<body>
-<div id="app">
-
-  <!-- BOOTING -->
-  <div class="page active" data-page="BOOTING">
-    <div class="booting-page">
-      <div class="spinner-big"></div>
-      <div style="font-size:18px;font-weight:700;color:#64748b">Käivitan kioski…</div>
-    </div>
-  </div>
-
-  <!-- UNCLAIMED -->
-  <div class="page" data-page="UNCLAIMED">
-    <div class="unclaimed-page">
-      <span class="badge"><span class="dot"></span>Ootan sidumist</span>
-      <h1 style="font-size:36px;font-weight:900;line-height:1.1">See seade pole<br/>veel seotud</h1>
-      <p style="font-size:17px;color:#64748b;max-width:340px">Administraator peab paneelist seda kontrollerit kapiga siduma.</p>
-      <div class="serial-card">
-        <div class="lbl">Seerianumber</div>
-        <div class="val" id="unclaimedSerial">—</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- HOME -->
-  <div class="page" data-page="HOME">
-    <div class="hero" id="homeGesture">
-      <div class="logo-card" id="logoCard">
-        <span class="icon">
-          <!-- Cube/locker icon -->
-          <svg viewBox="0 0 24 24" fill="none">
-            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" stroke="white" stroke-width="2" stroke-linejoin="round"/>
-            <path d="M3.27 6.96L12 12l8.73-5.04M12 22V12" stroke="white" stroke-width="2" stroke-linejoin="round"/>
-          </svg>
-        </span>
-        <span class="wordmark">
-          <span class="name" id="brandName">Kohvrikapid</span>
-          <span class="tag" id="brandTag">Pakihoid</span>
-        </span>
-      </div>
-      <h1 data-i18n="home.title">Pakihoiukapp</h1>
-      <p class="sub" data-i18n="home.subtitle">Hoiusta või võta välja oma pakid</p>
-      <div class="lang-pill">
-        <button id="langEn">ENGLISH</button>
-        <button id="langEt" class="active">EESTI</button>
-      </div>
-    </div>
-    <div class="actions">
-      <button class="action-btn green" data-go="STORE">
-        <span class="ico-box">
-          <!-- Luggage icon -->
-          <svg viewBox="0 0 24 24" fill="none">
-            <rect x="3" y="7" width="18" height="14" rx="2.5" stroke="white" stroke-width="2.2"/>
-            <path d="M8 7V4.5A1.5 1.5 0 019.5 3h5A1.5 1.5 0 0116 4.5V7" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
-            <path d="M3 13h18" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
-            <circle cx="7" cy="22" r="0.6" fill="white"/>
-            <circle cx="17" cy="22" r="0.6" fill="white"/>
-          </svg>
-        </span>
-        <span class="label-block">
-          <span class="l" data-i18n="home.store">Pane hoiule</span>
-          <span class="s" data-i18n="home.storeSub">Hoiusta kohver või pakk</span>
-        </span>
-      </button>
-      <button class="action-btn blue" data-go="RETRIEVE">
-        <span class="ico-box">
-          <!-- Package icon -->
-          <svg viewBox="0 0 24 24" fill="none">
-            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" stroke="white" stroke-width="2.2" stroke-linejoin="round"/>
-            <path d="M3.27 6.96L12 12l8.73-5.04M12 22V12" stroke="white" stroke-width="2.2" stroke-linejoin="round"/>
-          </svg>
-        </span>
-        <span class="label-block">
-          <span class="l" data-i18n="home.retrieve">Võta välja</span>
-          <span class="s" data-i18n="home.retrieveSub">Sisesta PIN</span>
-        </span>
-      </button>
-    </div>
-    <button class="ghost-action" data-go="RETRIEVE">
-      <span class="ico-box">
-        <svg viewBox="0 0 24 24" fill="none">
-          <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" stroke="#2563eb" stroke-width="2.2" stroke-linejoin="round"/>
-        </svg>
-      </span>
-      <span class="label-block">
-        <span class="l" data-i18n="home.temp">Võta korraks asju välja</span>
-        <span class="s" data-i18n="home.tempHint">Ei lõpeta hoiustamist</span>
-      </span>
-    </button>
-    <button class="help-btn">
-      <svg viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
-        <path d="M9.5 9a2.5 2.5 0 015 .5c0 1.5-2.5 2-2.5 3.5M12 17h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-      </svg>
-      <span data-i18n="home.help">Abi & juhend</span>
-    </button>
-  </div>
-
-  <!-- STORE -->
-  <div class="page" data-page="STORE">
-    <div class="sub-header">
-      <button class="back-btn" data-go="HOME">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <div class="title-block">
-        <div class="t" data-i18n="store.title">Pane hoiule</div>
-        <div class="s" data-i18n="store.sub">Vali kohver ja säilitusaeg</div>
-      </div>
-    </div>
-    <div class="centered-page">
-      <div style="font-size:18px;color:#64748b;line-height:1.4;max-width:340px">
-        Hoiustamise voog tuleb varsti.<br/>
-        Praegu testimisel — kasuta <b>Võta välja</b> nuppu administraatori loodud PIN-iga.
-      </div>
-    </div>
-  </div>
-
-  <!-- RETRIEVE -->
-  <div class="page" data-page="RETRIEVE">
-    <div class="sub-header">
-      <button class="back-btn" data-go="HOME">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <div class="title-block">
-        <div class="t" data-i18n="retrieve.title">Sisesta PIN</div>
-        <div class="s" data-i18n="retrieve.sub">Avab sinu luugi</div>
-      </div>
-    </div>
-    <div class="pin-page-body">
-      <div class="pin-display" id="pinDisplay"></div>
-      <div class="status-msg" id="statusMsg"></div>
-      <div class="keypad" id="keypad">
-        <button class="key" data-d="1">1</button>
-        <button class="key" data-d="2">2</button>
-        <button class="key" data-d="3">3</button>
-        <button class="key" data-d="4">4</button>
-        <button class="key" data-d="5">5</button>
-        <button class="key" data-d="6">6</button>
-        <button class="key" data-d="7">7</button>
-        <button class="key" data-d="8">8</button>
-        <button class="key" data-d="9">9</button>
-        <div class="key-empty"></div>
-        <button class="key" data-d="0">0</button>
-        <button class="key back" id="backBtn">
-          <svg viewBox="0 0 24 24" fill="none">
-            <path d="M3 12l5.5-6h12v12h-12L3 12z" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
-            <path d="M14 9l-4 6m0-6l4 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
-          </svg>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- OPENING -->
-  <div class="page" data-page="OPENING">
-    <div class="centered-page">
-      <div class="spinner-big"></div>
-      <div class="big-heading"><span data-i18n="opening.title">Avab luugi</span><br/><span class="accent" id="openingSlot">—</span></div>
-      <div class="big-sub" data-i18n="opening.sub">Palun oota…</div>
-    </div>
-  </div>
-
-  <!-- SUCCESS -->
-  <div class="page" data-page="SUCCESS">
-    <div class="centered-page">
-      <div class="check-circle">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l5 5L20 7" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </div>
-      <div class="big-heading"><span data-i18n="success.title">Luuk</span> <span id="successSlot">—</span> <span data-i18n="success.opened">avatud</span></div>
-      <div class="big-sub" data-i18n="success.sub">Võta ese ja sulge luuk</div>
-    </div>
-  </div>
-
-  <!-- ADMIN_PIN -->
-  <div class="page" data-page="ADMIN_PIN">
-    <div class="sub-header">
-      <button class="back-btn" data-go="HOME">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <div class="title-block">
-        <div class="t">Administraator</div>
-        <div class="s">Admin vaade tuleb varsti</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="footer">
-    <span class="net-pill" id="netPill" style="display:none"><span class="dot"></span><span id="netLabel">—</span></span>
-    <span class="debug" id="debug"></span>
-    <span id="clock">—:—</span>
-  </div>
-</div>
-
+  <!DOCTYPE html>
+  <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>Raspberry Pi Locker UI</title>
+    
+<!-- __KIOSK_ERROR_OVERLAY__ -->
 <script>
-'use strict';
-(function() {
-  var STRINGS = {
-    et: {
-      'home.title': 'Pakihoiukapp',
-      'home.subtitle': 'Hoiusta või võta välja oma pakid',
-      'home.store': 'Pane hoiule',
-      'home.storeSub': 'Hoiusta kohver või pakk',
-      'home.retrieve': 'Võta välja',
-      'home.retrieveSub': 'Sisesta PIN',
-      'home.temp': 'Võta korraks asju välja',
-      'home.tempHint': 'Ei lõpeta hoiustamist',
-      'home.help': 'Abi & juhend',
-      'store.title': 'Pane hoiule',
-      'store.sub': 'Vali kohver ja säilitusaeg',
-      'retrieve.title': 'Sisesta PIN',
-      'retrieve.sub': 'Avab sinu luugi',
-      'opening.title': 'Avab luugi',
-      'opening.sub': 'Palun oota…',
-      'success.title': 'Luuk',
-      'success.opened': 'on avatud',
-      'success.sub': 'Võta ese ja sulge luuk',
-    },
-    en: {
-      'home.title': 'Locker storage',
-      'home.subtitle': 'Store or pick up your packages',
-      'home.store': 'Drop off',
-      'home.storeSub': 'Store a bag or parcel',
-      'home.retrieve': 'Pick up',
-      'home.retrieveSub': 'Enter PIN',
-      'home.temp': 'Access items briefly',
-      'home.tempHint': 'Does not end storage',
-      'home.help': 'Help & guide',
-      'store.title': 'Drop off',
-      'store.sub': 'Choose locker and duration',
-      'retrieve.title': 'Enter PIN',
-      'retrieve.sub': 'Opens your locker',
-      'opening.title': 'Opening locker',
-      'opening.sub': 'Please wait…',
-      'success.title': 'Locker',
-      'success.opened': 'is open',
-      'success.sub': 'Take your item and close the door',
-    },
-  };
-  var lang = 'et';
-  function applyLang() {
-    document.documentElement.lang = lang;
-    var s = STRINGS[lang];
-    document.querySelectorAll('[data-i18n]').forEach(function(el) {
-      var k = el.dataset.i18n;
-      if (s[k]) el.textContent = s[k];
-    });
-    document.getElementById('langEn').classList.toggle('active', lang === 'en');
-    document.getElementById('langEt').classList.toggle('active', lang === 'et');
+(function () {
+  function esc(x){ return String(x||"").replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+  function show(title, detail){
+    try{
+      var pre = document.createElement('pre');
+      pre.id = '__kiosk_error__';
+      pre.style.cssText = 'white-space:pre-wrap;word-break:break-word;padding:16px;margin:0;font:14px/1.35 monospace;background:#fff;color:#b00020;';
+      pre.innerHTML = esc(title) + "\\n\\n" + esc(detail);
+      document.body.innerHTML = "";
+      document.body.appendChild(pre);
+    }catch(e){}
   }
 
-  var currentPage = 'BOOTING';
-  function setPage(name) {
-    if (currentPage === name) return;
-    currentPage = name;
-    document.querySelectorAll('.page').forEach(function(p) {
-      p.classList.toggle('active', p.dataset.page === name);
-    });
-  }
-
-  /* PIN state */
-  var pin = '';
-  var phase = 'idle';
-  var slotCode = '';
-  var errorMsg = '';
-
-  function renderPin() {
-    var html = '';
-    for (var i = 0; i < 6; i++) {
-      html += '<div class="pin-dot ' + (i < pin.length ? 'filled' : '') + '">' + (i < pin.length ? '●' : '') + '</div>';
-    }
-    document.getElementById('pinDisplay').innerHTML = html;
-  }
-  function renderStatus() {
-    var el = document.getElementById('statusMsg');
-    el.className = 'status-msg';
-    if (phase === 'verifying') { el.classList.add('checking'); el.textContent = lang === 'et' ? 'Kontrollin…' : 'Checking…'; }
-    else if (phase === 'error') { el.classList.add('error'); el.textContent = errorMsg; }
-    else el.textContent = '';
-  }
-  function errMsg(code) {
-    var map = lang === 'et'
-      ? { invalid_pin: 'Vale PIN', device_not_paired: 'Seade pole seotud', cabinet_not_found: 'Kapp puudub', not_storage_cabinet: 'Pole hoiukapp' }
-      : { invalid_pin: 'Wrong PIN', device_not_paired: 'Device not paired', cabinet_not_found: 'Cabinet missing', not_storage_cabinet: 'Not storage cabinet' };
-    return map[code] || code || (lang === 'et' ? 'Tundmatu viga' : 'Unknown error');
-  }
-  function submitPin() {
-    if (pin.length < 3) return;
-    phase = 'verifying'; renderStatus();
-    fetch('/api/storage/verify-pin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: pin }) })
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        if (d.ok && d.slot_code) {
-          slotCode = d.slot_code;
-          document.getElementById('openingSlot').textContent = slotCode;
-          document.getElementById('successSlot').textContent = slotCode;
-          setPage('OPENING'); phase = 'idle';
-          setTimeout(function() {
-            setPage('SUCCESS');
-            setTimeout(function() { pin = ''; renderPin(); renderStatus(); setPage('HOME'); }, 8000);
-          }, 2500);
-        } else {
-          errorMsg = errMsg(d.error); phase = 'error'; renderStatus();
-          setTimeout(function() { if (phase === 'error') { pin = ''; phase = 'idle'; errorMsg = ''; renderPin(); renderStatus(); } }, 2500);
-        }
-      })
-      .catch(function() {
-        errorMsg = lang === 'et' ? 'Võrgu viga' : 'Network error'; phase = 'error'; renderStatus();
-        setTimeout(function() { if (phase === 'error') { pin = ''; phase = 'idle'; errorMsg = ''; renderPin(); renderStatus(); } }, 2500);
-      });
-  }
-  function pressDigit(d) {
-    if (phase !== 'idle' || pin.length >= 6) return;
-    pin += d; renderPin();
-    if (pin.length === 6) submitPin();
-  }
-  function pressBack() {
-    if (phase !== 'idle') return;
-    pin = pin.slice(0, -1); renderPin();
-  }
-
-  document.querySelectorAll('[data-go]').forEach(function(el) {
-    el.addEventListener('click', function(e) {
-      e.stopPropagation();
-      var target = el.dataset.go;
-      if (target === 'RETRIEVE') { pin = ''; phase = 'idle'; errorMsg = ''; renderPin(); renderStatus(); }
-      setPage(target);
-    });
+  window.addEventListener('error', function (e) {
+    var msg = (e && e.message) ? e.message : 'window error';
+    var st = (e && e.error && e.error.stack) ? e.error.stack : '';
+    show('JS ERROR', msg + (st ? "\\n\\n" + st : ""));
   });
-  document.querySelectorAll('.key[data-d]').forEach(function(b) {
-    b.addEventListener('click', function() { pressDigit(b.dataset.d); });
+
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = (e && e.reason) ? e.reason : 'unhandled rejection';
+    var msg = (r && r.message) ? r.message : String(r);
+    var st = (r && r.stack) ? r.stack : '';
+    show('UNHANDLED PROMISE REJECTION', msg + (st ? "\\n\\n" + st : ""));
   });
-  document.getElementById('backBtn').addEventListener('click', pressBack);
-  document.getElementById('langEn').addEventListener('click', function(e) { e.stopPropagation(); lang = 'en'; applyLang(); });
-  document.getElementById('langEt').addEventListener('click', function(e) { e.stopPropagation(); lang = 'et'; applyLang(); });
-
-  /* M-gesture */
-  var gPts = [], gDrawing = false;
-  function gpt(ev) { var t = ev.touches && ev.touches[0] ? ev.touches[0] : ev; return { x: t.clientX, y: t.clientY }; }
-  function gS(ev) { gDrawing = true; gPts = [gpt(ev)]; }
-  function gM(ev) { if (gDrawing) gPts.push(gpt(ev)); }
-  function gE() {
-    if (!gDrawing) return; gDrawing = false;
-    if (gPts.length < 15) return;
-    var step = Math.floor(gPts.length / 5); if (step < 2) return;
-    var avg = [];
-    for (var i = 0; i < 5; i++) {
-      var sl = gPts.slice(i * step, i === 4 ? gPts.length : (i + 1) * step);
-      avg.push(sl.reduce(function(a, p) { return a + p.y; }, 0) / sl.length);
-    }
-    var isM = (avg[0] > avg[1] && avg[1] < avg[2] && avg[2] > avg[3] && avg[3] < avg[4]) ||
-              (avg[0] < avg[1] && avg[1] > avg[2] && avg[2] < avg[3] && avg[3] > avg[4]);
-    if (isM) setPage('ADMIN_PIN');
-  }
-  var hg = document.getElementById('homeGesture');
-  hg.addEventListener('mousedown', gS); hg.addEventListener('mousemove', gM); hg.addEventListener('mouseup', gE); hg.addEventListener('mouseleave', gE);
-  hg.addEventListener('touchstart', gS, { passive: true });
-  hg.addEventListener('touchmove', gM, { passive: true });
-  hg.addEventListener('touchend', gE);
-
-  /* State polling */
-  var pollCount = 0;
-  function applyState(s) {
-    if (s.cabinet_name) {
-      document.getElementById('brandName').textContent = s.cabinet_name;
-    }
-    if (s.view === 'BOOTING') {
-      setPage('BOOTING');
-    } else if (s.view === 'UNCLAIMED') {
-      document.getElementById('unclaimedSerial').textContent = s.serial || '—';
-      setPage('UNCLAIMED');
-    } else if (s.view === 'READY' && s.cabinet_kind === 'storage') {
-      if (currentPage === 'BOOTING' || currentPage === 'UNCLAIMED') setPage('HOME');
-    }
-    if (s.network) {
-      document.getElementById('netPill').style.display = 'inline-flex';
-      var lab = { cellular_router: '4G LTE', ethernet_client: 'Ethernet', unknown: 'Võrk maas' };
-      document.getElementById('netLabel').textContent = lab[s.network.mode] || s.network.mode || 'Võrk';
-    }
-  }
-  function pollState() {
-    fetch('/api/state', { cache: 'no-store' })
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        pollCount++;
-        document.getElementById('debug').textContent = 'v=' + d.view + ' #' + pollCount;
-        applyState(d);
-      })
-      .catch(function() { document.getElementById('debug').textContent = 'err'; })
-      .finally(function() { setTimeout(pollState, 1000); });
-  }
-  function clockTick() {
-    var d = new Date();
-    document.getElementById('clock').textContent = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
-    setTimeout(clockTick, 20000);
-  }
-
-  applyLang();
-  renderPin();
-  clockTick();
-  pollState();
 })();
 </script>
-</body>
-</html>
+
+
+<!-- __MAINTENANCE_STATIC_OVERLAY__ -->
+<script>
+(function () {
+  var API = "http://127.0.0.1:9122";
+  var ID = "__maintenance_overlay__";
+  var points = [];
+  var drawing = false;
+
+  function isAdminPath() {
+    return String(location.pathname || "").indexOf("/admin") === 0;
+  }
+
+  function goAdmin() {
+    hide();
+    try {
+      history.pushState({}, "", "/admin-pin");
+      try {
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      } catch (e) {
+        window.dispatchEvent(new Event("popstate"));
+      }
+    } catch (e) {
+      location.href = "/";
+    }
+  }
+
+  function getPoint(ev) {
+    var e = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
+    return { x: e.clientX || 0, y: e.clientY || 0, t: Date.now() };
+  }
+
+  function startGesture(ev) {
+    drawing = true;
+    points = [getPoint(ev)];
+  }
+
+  function moveGesture(ev) {
+    if (!drawing) return;
+    points.push(getPoint(ev));
+  }
+
+  function endGesture() {
+    if (!drawing) return;
+    drawing = false;
+
+    if (points.length < 15) return;
+
+    var xs = points.map(function (p) { return p.x; });
+    var ys = points.map(function (p) { return p.y; });
+    var minX = Math.min.apply(null, xs);
+    var maxX = Math.max.apply(null, xs);
+    var minY = Math.min.apply(null, ys);
+    var maxY = Math.max.apply(null, ys);
+
+    // liiga väike kriips ei loe
+    if ((maxX - minX) < 80 || (maxY - minY) < 80) return;
+
+    // Sama loogika nagu olemasolevas UI-s: 5 järjestikust segmenti,
+    // mille y-keskmine teeb M/W-laadse mustri.
+    var parts = 5;
+    var step = Math.floor(points.length / parts);
+    if (step < 2) return;
+
+    var avg = [];
+    for (var i = 0; i < parts; i++) {
+      var slice = points.slice(i * step, i === parts - 1 ? points.length : (i + 1) * step);
+      var sum = slice.reduce(function (a, p) { return a + p.y; }, 0);
+      avg.push(sum / slice.length);
+    }
+
+    var mShape =
+      (avg[0] < avg[1] && avg[1] > avg[2] && avg[2] < avg[3] && avg[3] > avg[4]) ||
+      (avg[0] > avg[1] && avg[1] < avg[2] && avg[2] > avg[3] && avg[3] < avg[4]);
+
+    if (mShape) {
+      goAdmin();
+    }
+  }
+
+  function hide() {
+    var el = document.getElementById(ID);
+    if (el) el.remove();
+    document.documentElement.style.overflow = "";
+    document.body.style.overflow = "";
+  }
+
+  function show(data) {
+    if (isAdminPath()) {
+      hide();
+      return;
+    }
+
+    var el = document.getElementById(ID);
+    if (!el) {
+      el = document.createElement("div");
+      el.id = ID;
+      el.style.cssText = [
+        "position:fixed",
+        "inset:0",
+        "z-index:999999",
+        "background:#020617",
+        "color:white",
+        "display:flex",
+        "flex-direction:column",
+        "align-items:center",
+        "justify-content:center",
+        "text-align:center",
+        "padding:48px",
+        "font-family:system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif",
+        "touch-action:none",
+        "user-select:none"
+      ].join(";");
+
+      el.innerHTML =
+        '<div style="font-size:56px;font-weight:900;margin-bottom:28px">Hooldustööd</div>' +
+        '<div id="maint_et" style="font-size:32px;font-weight:700;max-width:900px;line-height:1.25"></div>' +
+        '<div style="width:120px;height:4px;background:rgba(255,255,255,.25);border-radius:99px;margin:44px 0"></div>' +
+        '<div style="font-size:56px;font-weight:900;margin-bottom:28px">Maintenance</div>' +
+        '<div id="maint_en" style="font-size:32px;font-weight:700;max-width:900px;line-height:1.25;color:rgba(255,255,255,.9)"></div>';
+
+      el.addEventListener("mousedown", startGesture);
+      el.addEventListener("mousemove", moveGesture);
+      el.addEventListener("mouseup", endGesture);
+      el.addEventListener("mouseleave", endGesture);
+
+      el.addEventListener("touchstart", startGesture, { passive: true });
+      el.addEventListener("touchmove", moveGesture, { passive: true });
+      el.addEventListener("touchend", endGesture);
+
+      document.body.appendChild(el);
+    }
+
+    document.getElementById("maint_et").textContent = data.message_et || "Kiosk pole ajutiselt saadaval.";
+    document.getElementById("maint_en").textContent = data.message_en || "The kiosk is temporarily unavailable.";
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+  }
+
+  async function poll() {
+    try {
+      var res = await fetch(API + "/maintenance", { cache: "no-store" });
+      if (!res.ok) return;
+      var data = await res.json();
+      if (data && data.enabled) show(data);
+      else hide();
+    } catch (e) {}
+  }
+
+  window.addEventListener("DOMContentLoaded", function () {
+    poll();
+    setInterval(poll, 3000);
+  });
+})();
+</script>
+
+
+<script>
+(function () {
+  var started = Date.now();
+
+  function hasVisibleContent() {
+    var root = document.getElementById("root");
+    if (!root) return false;
+    var text = (root.innerText || "").trim();
+    var rect = root.getBoundingClientRect();
+    return text.length > 10 && rect.height > 100;
+  }
+
+  setTimeout(function () {
+    try {
+      if (!hasVisibleContent()) {
+        var count = Number(sessionStorage.getItem("blank_reload_count") || "0");
+        sessionStorage.setItem("blank_reload_count", String(count + 1));
+
+        if (count < 2) {
+          console.warn("Blank screen watchdog reload");
+          location.reload();
+        }
+      }
+    } catch (e) {}
+  }, 12000);
+
+  window.addEventListener("error", function (ev) {
+    try {
+      var item = {
+        ts: new Date().toISOString(),
+        message: ev.message,
+        source: ev.filename,
+        line: ev.lineno,
+        col: ev.colno
+      };
+      localStorage.setItem("kiosk_last_window_error", JSON.stringify(item));
+    } catch (e) {}
+  });
+})();
+</script>
+
+  <script type="module" crossorigin src="/assets/index-CsbTr5Fy.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-B0U_7m5R.css">
+</head>
+
+    <body>
+      <div id="root"></div>
+    </body>
+  </html>
+  
