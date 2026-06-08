@@ -16,13 +16,16 @@ Environment=XDG_RUNTIME_DIR=/run/kohvrikapid-kiosk
 Environment=WLR_NO_HARDWARE_CURSORS=1
 Environment=WLR_DRM_DEVICES=/dev/dri/card0
 Environment=XCURSOR_SIZE=1
-Environment=XCURSOR_THEME=none
+Environment=XCURSOR_THEME=invisible
+Environment=XCURSOR_PATH=/var/lib/kohvrikapid-agent/cursors
 Environment=LANG=et_EE.UTF-8
 Environment=LC_ALL=et_EE.UTF-8
 # Oota et lokaalne kiosk_server vastaks (max 30s)
 ExecStartPre=/bin/sh -c 'for i in $(seq 1 30); do curl -fsS http://127.0.0.1:7080/api/healthz >/dev/null && exit 0; sleep 1; done; exit 0'
 # Pre-seo chromium translate prefid, et "translate prompt" ei tuleks ette
 ExecStartPre=/bin/sh -c 'mkdir -p /var/lib/kohvrikapid-agent/chromium/Default && echo "{\"translate\":{\"enabled\":false},\"translate_blocked_languages\":[\"et\",\"en\",\"ru\",\"fi\"],\"translate_accepted_count\":{},\"translate_denied_count\":{},\"profile\":{\"default_content_setting_values\":{\"notifications\":2}}}" > /var/lib/kohvrikapid-agent/chromium/Default/Preferences'
+# Loo nähtamatu XCursor teema (1x1 transparent pixel) et peita hiir
+ExecStartPre=/usr/bin/python3 /opt/kohvrikapid-agent/scripts/create-invisible-cursor.py
 # Chromium kiosk — cog/WPE 2.48 läks katki pärast reboot, chromium töötab kindlasti
 ExecStart=/bin/sh -c 'BROWSER=$(command -v chromium-browser || command -v chromium); exec /usr/bin/cage -s -- "$BROWSER" --kiosk --noerrdialogs --disable-infobars --no-first-run --no-default-browser-check --disable-pinch --overscroll-history-navigation=0 --touch-events=enabled --user-data-dir=/var/lib/kohvrikapid-agent/chromium --window-size=720,1280 http://127.0.0.1:7080'
 Restart=always
