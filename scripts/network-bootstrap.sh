@@ -35,6 +35,8 @@ install -m 755 "$SRC_NET_DIR/udhcpc-eth0-hook.sh"      /usr/local/sbin/udhcpc-et
 install -m 755 "$SRC_NET_DIR/eth0-mode.sh"             /usr/local/sbin/eth0-mode.sh
 install -m 755 "$SRC_NET_DIR/4g-watchdog.sh"           /usr/local/sbin/4g-watchdog.sh
 install -m 755 "$SRC_NET_DIR/calyx-up.sh"              /usr/local/sbin/calyx-up.sh
+install -m 755 "$SRC_NET_DIR/dhcp-reservation-hook.sh"    /usr/local/sbin/dhcp-reservation-hook.sh
+install -m 755 "$SRC_NET_DIR/dhcp-reservation-cleanup.sh" /usr/local/sbin/dhcp-reservation-cleanup.sh
 
 log "Paigaldan systemd unit-id"
 install -m 644 "$SRC_UNIT_DIR/udhcpc-usb0.service"  /etc/systemd/system/udhcpc-usb0.service
@@ -47,6 +49,8 @@ install -m 644 "$SRC_UNIT_DIR/eth0-mode.path"       /etc/systemd/system/eth0-mod
 install -m 644 "$SRC_UNIT_DIR/4g-watchdog.service"  /etc/systemd/system/4g-watchdog.service
 install -m 644 "$SRC_UNIT_DIR/4g-watchdog.timer"    /etc/systemd/system/4g-watchdog.timer
 install -m 644 "$SRC_UNIT_DIR/calyx-up.service"     /etc/systemd/system/calyx-up.service
+install -m 644 "$SRC_UNIT_DIR/dhcp-reservation-cleanup.service" /etc/systemd/system/dhcp-reservation-cleanup.service
+install -m 644 "$SRC_UNIT_DIR/dhcp-reservation-cleanup.timer"   /etc/systemd/system/dhcp-reservation-cleanup.timer
 
 log "Paigaldan dnsmasq drop-in"
 install -d -m 755 /etc/dnsmasq.d
@@ -67,7 +71,13 @@ systemctl enable --now udhcpc-eth0.timer
 systemctl enable --now eth0-mode.timer
 systemctl enable --now eth0-mode.path
 systemctl enable --now 4g-watchdog.timer
+systemctl enable --now dhcp-reservation-cleanup.timer
 systemctl enable calyx-up.service || true
+
+# Algfailid (tühjad) — dnsmasq vajab et need olemas oleksid enne käivitamist
+touch /etc/dnsmasq.d/kohvrikapid-reservations.conf
+mkdir -p /var/lib/kohvrikapid-agent
+touch /var/lib/kohvrikapid-agent/dhcp-reservations.tsv
 
 # Esimene käivitus kohe
 systemctl start calyx-up.service || true

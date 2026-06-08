@@ -305,10 +305,15 @@ def run() -> None:
             net_state = network.gather_network_state()
             # Aeg-ajalt skaneerime aktiivset alamvõrku Kerong kontrollerite leidmiseks
             if config.discovery_enabled and time.time() - last_discovery_ts > discovery_period:
+                subnet = net_state.get("discovery_subnet")
                 try:
-                    discovery.scan_kerong(net_state.get("discovery_subnet"))
+                    discovery.scan_kerong(subnet)
                 except Exception as e:
-                    log.warning("Discovery scan ebaõnnestus: %s", e)
+                    log.warning("Kerong discovery scan ebaõnnestus: %s", e)
+                try:
+                    discovery.scan_neighbors(subnet)
+                except Exception as e:
+                    log.warning("LAN neighbors scan ebaõnnestus: %s", e)
                 last_discovery_ts = time.time()
 
             extra = {

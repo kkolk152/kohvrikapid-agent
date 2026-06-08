@@ -1,0 +1,6 @@
+[Unit]
+Description=Kohvrikapid DHCP reservation cleanup (60d expire)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/dhcp-reservation-cleanup.sh
