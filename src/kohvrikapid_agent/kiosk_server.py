@@ -58,11 +58,69 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/healthz":
             self._send_json({"ok": True})
             return
+        # Reference Pi dist serveerib /maintenance — vastame "pole hoolduses"
+        # (kiosk_server kuulab AINULT 127.0.0.1:7080-l aga reference UI küsib
+        # 9122-lt — kui see ka tulevikus muudetakse, vastame siin samuti)
+        if self.path == "/maintenance":
+            self._send_json({"enabled": False})
+            return
+        # Reference Pi logo asendamine: kui tenant brandiga seadistatud
+        # logo_url v\xf5i logo_data_uri, serveeri see vana TH-Express PNG asemel
+        if self.path == "/TH-Express-202604.png":
+            if self._serve_tenant_logo():
+                return
         # Static fallback (SPA): kui faili pole, serveeri index.html
         full = self._dist_dir / self.path.lstrip("/").split("?", 1)[0]
         if self.path != "/" and not full.exists():
             self.path = "/"
         super().do_GET()
+
+    def _serve_tenant_logo(self) -> bool:
+        """Kui display_state-is on tenant logo, serveeri see; muidu False -> default."""
+        state = self._load_state()
+        # logo_data_uri prioriteet (base64 PNG) — sõltumatu võrgust
+        data_uri = state.get("logo_data_uri")
+        if isinstance(data_uri, str) and data_uri.startswith("data:image/"):
+            try:
+                import base64
+                head, b64 = data_uri.split(",", 1)
+                mime = head.split(";", 1)[0].replace("data:", "")
+                body = base64.b64decode(b64)
+                self.send_response(200)
+                self.send_header("Content-Type", mime or "image/png")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "max-age=60")
+                self.end_headers()
+                self.wfile.write(body)
+                return True
+            except Exception as e:
+                log.warning("logo_data_uri decode failed: %s", e)
+        # logo_url — proxy fetch
+        logo_url = state.get("logo_url")
+        if isinstance(logo_url, str) and logo_url.startswith(("http://", "https://")):
+            try:
+                r = httpx.get(logo_url, timeout=5)
+                if r.status_code == 200:
+                    ct = r.headers.get("Content-Type", "image/png")
+                    self.send_response(200)
+                    self.send_header("Content-Type", ct)
+                    self.send_header("Content-Length", str(len(r.content)))
+                    self.send_header("Cache-Control", "max-age=60")
+                    self.end_headers()
+                    self.wfile.write(r.content)
+                    return True
+                log.warning("logo fetch %s: HTTP %d", logo_url, r.status_code)
+            except Exception as e:
+                log.warning("logo fetch %s failed: %s", logo_url, e)
+        return False
+
+    def _load_state(self) -> dict:
+        try:
+            if STATE_FILE.exists():
+                return json.loads(STATE_FILE.read_text())
+        except Exception:
+            pass
+        return {}
 
     def do_POST(self) -> None:  # noqa: N802
         if self.path == "/api/storage/verify-pin":

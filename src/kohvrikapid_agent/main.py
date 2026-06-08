@@ -239,6 +239,7 @@ def run() -> None:
                     network_state=net_state,
                     serial=serial,
                     agent_version=__version__,
+                    tenant_config=cfg_part,
                 )
             else:
                 new_state = claim_state(

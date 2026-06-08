@@ -57,7 +57,8 @@ def claim_state(serial: str, server_url: str, agent_version: str, firmware_versi
     }
 
 
-def ready_state(cabinet_name: str, cabinet_kind: str, slot_status: dict | None = None, network_state: dict | None = None, serial: str | None = None, agent_version: str | None = None) -> dict:
+def ready_state(cabinet_name: str, cabinet_kind: str, slot_status: dict | None = None, network_state: dict | None = None, serial: str | None = None, agent_version: str | None = None, tenant_config: dict | None = None) -> dict:
+    tc = tenant_config or {}
     return {
         "view": "READY",
         "title": cabinet_name,
@@ -69,6 +70,15 @@ def ready_state(cabinet_name: str, cabinet_kind: str, slot_status: dict | None =
         "serial": serial,
         "agent_version": agent_version,
         "network": network_state or {},
+        # Tenant/brand info platformilt long-poll-i kaudu
+        "tenant_name": tc.get("tenant_name"),
+        "tenant_branding": tc.get("tenant_branding") or {},
+        "contact_phone": tc.get("contact_phone"),
+        "contact_email": tc.get("contact_email"),
+        "support_url": tc.get("support_url"),
+        "logo_url": tc.get("logo_url"),
+        "logo_data_uri": tc.get("logo_data_uri"),
+        "slot_count": tc.get("slot_count", 0),
     }
 
 
