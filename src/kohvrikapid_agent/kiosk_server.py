@@ -58,22 +58,90 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/healthz":
             self._send_json({"ok": True})
             return
-        # Reference Pi dist serveerib /maintenance — vastame "pole hoolduses"
-        # (kiosk_server kuulab AINULT 127.0.0.1:7080-l aga reference UI küsib
-        # 9122-lt — kui see ka tulevikus muudetakse, vastame siin samuti)
         if self.path == "/maintenance":
             self._send_json({"enabled": False})
             return
-        # Reference Pi logo asendamine: kui tenant brandiga seadistatud
-        # logo_url v\xf5i logo_data_uri, serveeri see vana TH-Express PNG asemel
         if self.path == "/TH-Express-202604.png":
             if self._serve_tenant_logo():
+                return
+        # Patch JS bundle: asenda hardcoded Tallink phone/email/brand/lockers
+        # tenant brand-ist tulnud väärtustega
+        if self.path.startswith("/assets/") and self.path.endswith(".js"):
+            if self._serve_patched_js():
                 return
         # Static fallback (SPA): kui faili pole, serveeri index.html
         full = self._dist_dir / self.path.lstrip("/").split("?", 1)[0]
         if self.path != "/" and not full.exists():
             self.path = "/"
         super().do_GET()
+
+    def _serve_patched_js(self) -> bool:
+        rel = self.path.lstrip("/").split("?", 1)[0]
+        full = self._dist_dir / rel
+        if not full.exists():
+            return False
+        state = self._load_state()
+        try:
+            content = full.read_text()
+        except Exception:
+            return False
+
+        # 1) telefon
+        phone = state.get("contact_phone")
+        if isinstance(phone, str) and phone:
+            content = content.replace('"6678700"', f'"{phone}"')
+        # 2) email — kõikjal, sh mailto:
+        email = state.get("contact_email")
+        if isinstance(email, str) and email:
+            content = content.replace('"expresshotel@tallink.ee"', f'"{email}"')
+            content = content.replace('"mailto:expresshotel@tallink.ee"', f'"mailto:{email}"')
+        # 3) brand nimi
+        brand = state.get("tenant_name") or state.get("cabinet_name")
+        if isinstance(brand, str) and brand:
+            content = content.replace('"TH Express"', f'"{brand}"')
+            content = content.replace('"Tallink Express"', f'"{brand}"')
+            content = content.replace('"Tallink Tarmo"', f'"{brand}"')
+        # 4) kapi loend mp=[...] -> uue suuruse järgi N kappi
+        slot_count = state.get("slot_count")
+        if isinstance(slot_count, int) and slot_count > 0:
+            content = self._patch_locker_array(content, slot_count)
+
+        body = content.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/javascript; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+        return True
+
+    @staticmethod
+    def _patch_locker_array(js: str, n: int) -> str:
+        """Asenda `mp=[{id:"locker-1",...},...]` uue N kapiga."""
+        anchor = '[{id:"locker-1",number:"01"'
+        start = js.find(anchor)
+        if start < 0:
+            return js
+        depth = 0
+        end = -1
+        for i in range(start, min(start + 200_000, len(js))):
+            ch = js[i]
+            if ch == "[":
+                depth += 1
+            elif ch == "]":
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end < 0:
+            return js
+        items = []
+        for i in range(1, n + 1):
+            items.append(
+                f'{{id:"locker-{i}",number:"{i:02d}",size:"M",cu:"CU1",lock:{i}}}'
+            )
+        new_arr = "[" + ",".join(items) + "]"
+        return js[:start] + new_arr + js[end:]
 
     def _serve_tenant_logo(self) -> bool:
         """Kui display_state-is on tenant logo, serveeri see; muidu False -> default."""
