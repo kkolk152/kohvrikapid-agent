@@ -1,16 +1,383 @@
 <!doctype html>
 <html lang="et">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Kohvrikapid</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <script type="module" crossorigin src="/assets/index-CD3jVqL9.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-uvsuxcIT.css">
-  </head>
-  <body class="bg-slate-950 text-slate-100 antialiased">
-    <div id="app"></div>
-  </body>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Kohvrikapid</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; cursor: none; user-select: none; -webkit-user-select: none; }
+  html, body, #app { height: 100%; overflow: hidden; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #020617;
+    color: #f1f5f9;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::-webkit-scrollbar { display: none; }
+
+  .bg-decoration { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+  .bg-decoration::before {
+    content: ''; position: absolute; top: -8rem; left: 50%; transform: translateX(-50%);
+    width: 24rem; height: 24rem; border-radius: 9999px;
+    background: rgba(37, 99, 235, 0.3); filter: blur(80px);
+  }
+  .bg-decoration::after {
+    content: ''; position: absolute; bottom: -10rem; right: 0;
+    width: 20rem; height: 20rem; border-radius: 9999px;
+    background: rgba(124, 58, 237, 0.2); filter: blur(80px);
+  }
+
+  header {
+    position: relative; z-index: 10;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 20px;
+  }
+  header .brand { display: flex; align-items: center; gap: 8px; }
+  header .logo {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: white; color: #0f172a;
+    display: grid; place-items: center; font-weight: 700;
+  }
+  header .meta {
+    font-size: 11px; color: #94a3b8; display: flex; align-items: center; gap: 8px;
+  }
+  .pill {
+    border: 1px solid #334155; background: rgba(15,23,42,0.6);
+    border-radius: 8px; padding: 4px 8px; font-family: ui-monospace, monospace;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .pill .dot { width: 6px; height: 6px; border-radius: 9999px; }
+  .dot-green { background: #10b981; }
+
+  main {
+    position: relative; z-index: 10;
+    height: calc(100% - 56px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  .view { display: none; width: 100%; max-width: 24rem; text-align: center; }
+  .view.active { display: flex; flex-direction: column; gap: 16px; align-items: center; }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    border-radius: 9999px; padding: 6px 12px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .badge-amber { border: 1px solid rgba(245,158,11,0.3); background: rgba(245,158,11,0.1); color: #fcd34d; }
+  .badge-emerald { border: 1px solid rgba(16,185,129,0.3); background: rgba(16,185,129,0.1); color: #6ee7b7; }
+  .badge .dot { width: 6px; height: 6px; border-radius: 9999px; }
+  .badge-amber .dot { background: #fbbf24; animation: pulse 2s infinite; }
+  .badge-emerald .dot { background: #34d399; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  h1 { font-size: 28px; line-height: 1.1; font-weight: 800; color: white; letter-spacing: -0.02em; }
+  p { font-size: 14px; line-height: 1.4; color: #94a3b8; }
+
+  .serial-card {
+    border: 1px solid rgba(59,130,246,0.3); background: rgba(59,130,246,0.05);
+    border-radius: 16px; padding: 16px 24px; width: 100%;
+  }
+  .serial-card .label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #93c5fd;
+  }
+  .serial-card .value {
+    margin-top: 4px; font-family: ui-monospace, monospace; font-size: 24px; font-weight: 700; color: white;
+  }
+
+  .pin-display { display: flex; gap: 12px; justify-content: center; }
+  .pin-dot {
+    width: 44px; height: 44px; border-radius: 12px;
+    border: 1px solid #334155; background: rgba(15,23,42,0.6);
+    display: grid; place-items: center;
+    font-size: 22px; font-weight: 700; color: #475569;
+    transition: all 0.15s;
+  }
+  .pin-dot.filled {
+    border-color: rgba(16,185,129,0.5); background: rgba(16,185,129,0.1); color: #6ee7b7;
+  }
+
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; }
+  .keypad button {
+    height: 56px; border-radius: 12px;
+    border: 1px solid #334155; background: rgba(15,23,42,0.6);
+    font-size: 22px; font-weight: 700; color: white;
+    box-shadow: 0 4px 6px -1px rgba(2,6,23,0.4);
+    transition: transform 0.08s, background 0.08s;
+    cursor: none; -webkit-tap-highlight-color: transparent;
+  }
+  .keypad button:active { transform: scale(0.95); background: #1e293b; }
+  .keypad button:disabled { opacity: 0.5; }
+  .keypad button.aux {
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8;
+    background: rgba(15,23,42,0.4);
+  }
+
+  .verifying { font-size: 13px; color: #94a3b8; }
+  .error-msg {
+    font-size: 13px;
+    border: 1px solid rgba(239,68,68,0.4); background: rgba(239,68,68,0.1); color: #fca5a5;
+    border-radius: 8px; padding: 8px 16px; font-weight: 600;
+  }
+
+  .spinner {
+    width: 64px; height: 64px; border-radius: 9999px;
+    border: 4px solid #334155; border-top-color: #3b82f6;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .check-circle {
+    width: 96px; height: 96px; border-radius: 9999px;
+    background: linear-gradient(135deg, #10b981, #059669);
+    box-shadow: 0 25px 50px -12px rgba(16,185,129,0.4);
+    display: grid; place-items: center;
+  }
+  .check-circle svg { width: 56px; height: 56px; }
+
+  .debug {
+    position: fixed; bottom: 4px; left: 4px; z-index: 999;
+    font-family: ui-monospace, monospace; font-size: 9px; color: #475569;
+    background: rgba(0,0,0,0.5); padding: 4px 8px; border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+  <div class="bg-decoration"></div>
+
+  <header>
+    <div class="brand">
+      <div class="logo">K</div>
+      <div style="font-size:13px;font-weight:600">Kohvrikapid</div>
+    </div>
+    <div class="meta">
+      <span class="pill" id="netPill" style="display:none"><span class="dot dot-green"></span><span id="netLabel">—</span></span>
+      <span class="pill" id="clock" style="font-family:ui-monospace,monospace">—:—</span>
+    </div>
+  </header>
+
+  <main id="app">
+    <div class="view active" data-view="BOOTING">
+      <div class="spinner"></div>
+      <div style="font-size:15px;color:#cbd5e1">Käivitan…</div>
+    </div>
+
+    <div class="view" data-view="UNCLAIMED">
+      <span class="badge badge-amber"><span class="dot"></span>Ootan sidumist</span>
+      <h1>See seade pole<br/>veel seotud</h1>
+      <p>Administraator peab admin paneelist<br/>seda kontrollerit kapiga siduma.</p>
+      <div class="serial-card">
+        <div class="label">Seerianumber</div>
+        <div class="value" id="unclaimedSerial">—</div>
+      </div>
+    </div>
+
+    <div class="view" data-view="STORAGE_IDLE">
+      <span class="badge badge-emerald"><span class="dot"></span><span id="cabName">Hoiukapp</span></span>
+      <h1 style="font-size:22px">Sisesta PIN</h1>
+      <p style="margin-top:-8px">Avab sinu luugi</p>
+      <div class="pin-display" id="pinDisplay"></div>
+      <div id="statusBox"></div>
+      <div class="keypad">
+        <button class="key" data-d="1">1</button>
+        <button class="key" data-d="2">2</button>
+        <button class="key" data-d="3">3</button>
+        <button class="key" data-d="4">4</button>
+        <button class="key" data-d="5">5</button>
+        <button class="key" data-d="6">6</button>
+        <button class="key" data-d="7">7</button>
+        <button class="key" data-d="8">8</button>
+        <button class="key" data-d="9">9</button>
+        <button class="key aux" id="clearBtn">Tühjenda</button>
+        <button class="key" data-d="0">0</button>
+        <button class="key aux" id="backBtn">←</button>
+      </div>
+    </div>
+
+    <div class="view" data-view="STORAGE_OPENING">
+      <div class="spinner"></div>
+      <h1 style="font-size:24px">Avab luugi <span id="openingSlot">—</span></h1>
+      <p>Palun oota…</p>
+    </div>
+
+    <div class="view" data-view="STORAGE_SUCCESS">
+      <div class="check-circle">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M5 12l5 5L20 7" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h1>Luuk <span id="successSlot">—</span> avatud</h1>
+      <p>Võta ese ja sulge luuk</p>
+    </div>
+  </main>
+
+  <div class="debug" id="debug">init</div>
+
+<script>
+'use strict';
+(function() {
+  var pin = '';
+  var localPhase = 'idle';
+  var resetTimer = null;
+  var slotCode = '';
+  var errorMsg = '';
+  var fetchCount = 0;
+
+  function $(sel) { return document.querySelector(sel); }
+  function $$(sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); }
+
+  function setView(name) {
+    $$('.view').forEach(function(v) {
+      v.classList.toggle('active', v.dataset.view === name);
+    });
+  }
+
+  function fmtTime(d) {
+    var hh = ('0' + d.getHours()).slice(-2);
+    var mm = ('0' + d.getMinutes()).slice(-2);
+    return hh + ':' + mm;
+  }
+
+  function renderPin() {
+    var html = '';
+    for (var i = 0; i < 6; i++) {
+      html += '<div class="pin-dot ' + (i < pin.length ? 'filled' : '') + '">' + (i < pin.length ? '●' : '') + '</div>';
+    }
+    $('#pinDisplay').innerHTML = html;
+  }
+
+  function renderStatus() {
+    var box = $('#statusBox');
+    if (localPhase === 'verifying') {
+      box.innerHTML = '<div class="verifying">Kontrollin…</div>';
+    } else if (localPhase === 'error') {
+      box.innerHTML = '<div class="error-msg">' + errorMsg + '</div>';
+    } else {
+      box.innerHTML = '';
+    }
+  }
+
+  function scheduleReset(ms) {
+    if (resetTimer) clearTimeout(resetTimer);
+    resetTimer = setTimeout(function() {
+      pin = ''; slotCode = ''; errorMsg = ''; localPhase = 'idle';
+      renderPin(); renderStatus();
+      setView('STORAGE_IDLE');
+    }, ms);
+  }
+
+  function errorMessage(code) {
+    var map = {
+      invalid_pin: 'Vale PIN',
+      device_not_paired: 'Seade pole seotud',
+      cabinet_not_found: 'Kapp puudub',
+      not_storage_cabinet: 'Pole hoiukapp'
+    };
+    return map[code] || code || 'Tundmatu viga';
+  }
+
+  function submit() {
+    if (pin.length < 3) return;
+    localPhase = 'verifying'; renderStatus();
+    fetch('/api/storage/verify-pin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: pin })
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.ok && d.slot_code) {
+          slotCode = d.slot_code;
+          $('#openingSlot').textContent = slotCode;
+          $('#successSlot').textContent = slotCode;
+          localPhase = 'opening';
+          setView('STORAGE_OPENING');
+          scheduleReset(12000);
+          setTimeout(function() {
+            if (localPhase === 'opening') {
+              localPhase = 'success'; setView('STORAGE_SUCCESS');
+            }
+          }, 2500);
+        } else {
+          errorMsg = errorMessage(d.error);
+          localPhase = 'error'; renderStatus();
+          scheduleReset(4000);
+        }
+      })
+      .catch(function() {
+        errorMsg = 'Võrgu viga'; localPhase = 'error'; renderStatus(); scheduleReset(4000);
+      });
+  }
+
+  function pressDigit(d) {
+    if (localPhase !== 'idle' || pin.length >= 6) return;
+    pin += d; renderPin();
+    if (pin.length === 6) submit();
+  }
+  function pressBack() {
+    if (localPhase !== 'idle') return;
+    pin = pin.slice(0, -1); renderPin();
+  }
+  function pressClear() {
+    if (localPhase === 'error') {
+      pin = ''; localPhase = 'idle'; errorMsg = '';
+      renderPin(); renderStatus();
+    } else if (localPhase === 'idle') {
+      pin = ''; renderPin();
+    }
+  }
+
+  $$('button.key[data-d]').forEach(function(b) {
+    b.addEventListener('click', function() { pressDigit(b.dataset.d); });
+  });
+  $('#backBtn').addEventListener('click', pressBack);
+  $('#clearBtn').addEventListener('click', pressClear);
+
+  function applyState(s) {
+    var view = s.view;
+    if (view === 'BOOTING') {
+      setView('BOOTING');
+    } else if (view === 'UNCLAIMED') {
+      $('#unclaimedSerial').textContent = s.serial || '—';
+      setView('UNCLAIMED');
+    } else if (view === 'READY' && s.cabinet_kind === 'storage') {
+      $('#cabName').textContent = s.cabinet_name || 'Hoiukapp';
+      if (localPhase === 'idle') {
+        setView('STORAGE_IDLE');
+        renderPin(); renderStatus();
+      }
+    } else {
+      setView('BOOTING');
+    }
+    if (s.network) {
+      $('#netPill').style.display = 'inline-flex';
+      var labelMap = { cellular_router: '4G LTE', ethernet_client: 'Ethernet', unknown: '—' };
+      $('#netLabel').textContent = labelMap[s.network.mode] || 'Võrk';
+    }
+  }
+
+  function pollState() {
+    fetch('/api/state', { cache: 'no-store' })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        fetchCount++;
+        $('#debug').textContent = 'fetch=' + fetchCount + ' view=' + d.view + ' kind=' + (d.cabinet_kind || '-');
+        applyState(d);
+      })
+      .catch(function(e) {
+        $('#debug').textContent = 'err: ' + e;
+      })
+      .finally(function() { setTimeout(pollState, 1000); });
+  }
+
+  function tick() {
+    $('#clock').textContent = fmtTime(new Date());
+    setTimeout(tick, 30000);
+  }
+
+  renderPin();
+  tick();
+  pollState();
+})();
+</script>
+</body>
 </html>
