@@ -58,6 +58,24 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/healthz":
             self._send_json({"ok": True})
             return
+        if self.path == "/api/tenant-ready":
+            # Vastab 200-ga AINULT kui state-is on tenant config kohal (kapi
+            # boot-race vältimiseks: chromium ei tohi laadida JS-i enne kui
+            # contact_phone/contact_email/tenant_name on long-pollist tulnud).
+            state = self._load_state()
+            view = state.get("view")
+            phone = state.get("contact_phone")
+            tenant = state.get("tenant_name")
+            ready = (
+                view == "READY"
+                and isinstance(phone, str) and phone
+                and isinstance(tenant, str) and tenant
+            )
+            self._send_json(
+                {"ready": ready, "view": view, "has_phone": bool(phone), "has_tenant": bool(tenant)},
+                status=200 if ready else 503,
+            )
+            return
         if self.path == "/maintenance":
             self._send_json({"enabled": False})
             return

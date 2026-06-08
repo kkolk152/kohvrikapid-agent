@@ -5,7 +5,11 @@
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>Raspberry Pi Locker UI</title>
-    
+      <style>
+        /* Sunni cursor nähtamatuks — XCURSOR teema võib failida cage/chromium kombos */
+        html, body, * { cursor: none !important; }
+      </style>
+
 <!-- __KIOSK_ERROR_OVERLAY__ -->
 <script>
 (function () {
@@ -192,6 +196,29 @@
 })();
 </script>
 
+
+<script>
+// Tenant-state watcher: kui contact_phone v tenant_name muutub /api/state-is,
+// reload chromium et JS bundle patcher saaks uue väärtuse sisestada.
+(function () {
+  var lastSig = null;
+  async function checkState() {
+    try {
+      var r = await fetch("/api/state", { cache: "no-store" });
+      if (!r.ok) return;
+      var s = await r.json();
+      var sig = JSON.stringify([s.contact_phone, s.contact_email, s.tenant_name, s.slot_count]);
+      if (lastSig === null) { lastSig = sig; return; }
+      if (sig !== lastSig) {
+        try { sessionStorage.removeItem("blank_reload_count"); } catch (e) {}
+        location.reload();
+      }
+    } catch (e) {}
+  }
+  setInterval(checkState, 8000);
+  window.addEventListener("DOMContentLoaded", checkState);
+})();
+</script>
 
 <script>
 (function () {
