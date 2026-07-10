@@ -23,10 +23,17 @@ from typing import Optional
 
 log = logging.getLogger("kohvrikapid-agent.solar")
 
-NOTIFY_UUID = "0000ff01-0000-1000-8000-00805f9b34fb"
-WRITE_UUID = "0000ff02-0000-1000-8000-00805f9b34fb"
-GET_STATUS = bytes.fromhex("fe043030002bab15")
+# Get-status käsud, mida proovime (Lumiax/OEM Modbus). Kui seade pushib andmeid
+# ise (paljud ffe0-teenusega mudelid), saame frame'i ka ilma käsuta.
+GET_STATUS_COMMANDS = (
+    bytes.fromhex("fe043030002bab15"),
+    bytes.fromhex("fe0430000022e1d5"),
+)
 VALID_HEADERS = (b"\x01\x03", b"\x01\x04")
+
+# Eelistusjärjekord kui mitu vendor-karakteristikut sobib (16-bit lühivorm).
+_NOTIFY_PREF = ("ffe4", "ff01", "fff1", "ffe1", "fff4")
+_WRITE_PREF = ("ffe1", "ff02", "fff2", "ffe4", "fff1")
 
 
 class SolarUnavailable(RuntimeError):
@@ -98,6 +105,33 @@ async def _scan_async(timeout: float) -> list[dict]:
     return found
 
 
+def _pick_chars(client):
+    """Tuvastab AUTOMAATSELT notify + write karakteristikud vendor-teenustest
+    (ffxx). Töötab nii ffe4/ffe1 (SY-GM24) kui ff01/ff02 jt mudelitega — pole
+    vaja käsitsi UUID-e seadistada."""
+    notifies: list[str] = []
+    writes: list[str] = []
+    for service in client.services:
+        for ch in service.characteristics:
+            u = ch.uuid.lower()
+            if not u[4:8].startswith("ff"):
+                continue  # jäta standard-GATT (2axx) vahele
+            props = set(ch.properties)
+            if props & {"notify", "indicate"}:
+                notifies.append(u)
+            if props & {"write", "write-without-response"}:
+                writes.append(u)
+
+    def _best(cands: list[str], pref: tuple[str, ...]) -> Optional[str]:
+        for p in pref:
+            for u in cands:
+                if u[4:8] == p:
+                    return u
+        return cands[0] if cands else None
+
+    return _best(notifies, _NOTIFY_PREF), _best(writes, _WRITE_PREF)
+
+
 async def _read_once_async(mac: str, connect_timeout: float) -> dict:
     _require_bleak()
     from bleak import BleakClient, BleakScanner
@@ -115,25 +149,47 @@ async def _read_once_async(mac: str, connect_timeout: float) -> dict:
             full = bytearray(chunk)
         else:
             full.extend(chunk)
-        if len(full) >= 3:
-            expected = full[2] + 5  # id + fn + bytecount + payload + crc(2)
-            if len(full) >= expected:
+        if full[:2] in VALID_HEADERS and len(full) >= 3:
+            if len(full) >= full[2] + 5:  # id + fn + bytecount + payload + crc(2)
                 done.set()
+        elif len(full) >= 90:
+            done.set()
 
     async with BleakClient(target, timeout=connect_timeout) as client:
-        await client.start_notify(NOTIFY_UUID, on_notify)
+        notify_uuid, write_uuid = _pick_chars(client)
+        if not notify_uuid:
+            raise SolarUnavailable("ühtki notify-karakteristikut ei leitud")
+        log.info("Solar BLE: notify=%s write=%s", notify_uuid, write_uuid)
+        await client.start_notify(notify_uuid, on_notify)
         await asyncio.sleep(0.3)
-        try:
-            await client.write_gatt_char(WRITE_UUID, GET_STATUS, response=False)
-        except Exception:
-            await client.write_gatt_char(WRITE_UUID, GET_STATUS, response=True)
-        try:
-            await asyncio.wait_for(done.wait(), timeout=8.0)
-        finally:
+
+        # Proovi get-status käske; kui seade pushib ise, saame frame'i niikuinii.
+        if write_uuid:
+            for cmd in GET_STATUS_COMMANDS:
+                try:
+                    await client.write_gatt_char(write_uuid, cmd, response=False)
+                except Exception:
+                    try:
+                        await client.write_gatt_char(write_uuid, cmd, response=True)
+                    except Exception:
+                        pass
+                try:
+                    await asyncio.wait_for(done.wait(), timeout=3.0)
+                    break
+                except asyncio.TimeoutError:
+                    continue
+
+        if not done.is_set():
+            # auto-push seadmed vajavad ainult subscribimist
             try:
-                await client.stop_notify(NOTIFY_UUID)
-            except Exception:
+                await asyncio.wait_for(done.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
                 pass
+
+        try:
+            await client.stop_notify(notify_uuid)
+        except Exception:
+            pass
 
     return parse_frame(bytes(full))
 
@@ -166,5 +222,7 @@ def read_once(mac: str, connect_timeout: float = 15.0) -> Optional[dict]:
     except Exception as e:
         log.warning("BLE-lugem ebaõnnestus (%s): %s", mac, e)
         return None
+    if not data.get("raw_hex"):
+        return None  # frame'i ei tulnud — ära postita tühja
     data["ts"] = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
     return data
