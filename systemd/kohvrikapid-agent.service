@@ -1,7 +1,7 @@
 [Unit]
 Description=Kohvrikapid Agent (Raspberry Pi side klient)
-After=network-online.target udhcpc-usb0.service udhcpc-eth0.service
-Wants=network-online.target
+After=network-online.target udhcpc-usb0.service udhcpc-eth0.service bluetooth.service
+Wants=network-online.target bluetooth.service
 
 [Service]
 Type=simple
@@ -10,8 +10,8 @@ Group=kohvrikapid
 ExecStart=/opt/kohvrikapid-agent/.venv/bin/kohvrikapid-agent --run
 Restart=always
 RestartSec=5
-# Vajadusel ligipääs RS485-le, GPIO-le, framebufferile
-SupplementaryGroups=dialout gpio video
+# Vajadusel ligipääs RS485-le, GPIO-le, framebufferile, BLE-le (bluetooth = BlueZ DBus)
+SupplementaryGroups=dialout gpio video bluetooth
 # Lihtne sandbox
 NoNewPrivileges=true
 ProtectSystem=strict

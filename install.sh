@@ -29,7 +29,8 @@ ensure_deps() {
   apt-get install -y --no-install-recommends \
     python3 python3-venv python3-pip git ca-certificates curl \
     busybox dnsmasq nftables usb-modeswitch udev iproute2 iputils-ping \
-    fonts-dejavu-core
+    fonts-dejavu-core \
+    bluez
 
   if [[ "$ENABLE_KIOSK" == "1" ]]; then
     echo "[1b/9] Paigaldan kioski paketid (chromium + cage + node)"
@@ -51,8 +52,8 @@ ensure_user() {
   else
     echo "[2/9] Kasutaja $SERVICE_USER on juba olemas"
   fi
-  usermod -aG dialout,gpio,video,netdev,input,render,seat,tty "$SERVICE_USER" 2>/dev/null || \
-    usermod -aG dialout,gpio,video,netdev,input,render "$SERVICE_USER" || true
+  usermod -aG dialout,gpio,video,netdev,input,render,seat,tty,bluetooth "$SERVICE_USER" 2>/dev/null || \
+    usermod -aG dialout,gpio,video,netdev,input,render,bluetooth "$SERVICE_USER" || true
 }
 
 clone_or_update() {

@@ -15,6 +15,7 @@ from .display import claim_state, gather_network_info, ready_state, render_to_fr
 from .hardware import gather_hardware_info, gather_telemetry, send_rs485_packet
 from . import discovery, network
 from . import kiosk_server
+from . import solar
 from .ota import apply_firmware
 
 logging.basicConfig(
@@ -103,6 +104,8 @@ def handle_command(client: AgentClient, cmd: dict, config: AgentConfig) -> None:
             result.update(_query_locks(payload, config))
         elif action == "sync_stock":
             result["note"] = "no-op (stock state read on demand)"
+        elif action == "solar_scan":
+            result.update(_solar_scan(client, payload))
         elif action == "reboot":
             client.ack_command(cid, status="done", result={"note": "rebooting"})
             import subprocess
@@ -256,6 +259,41 @@ def _query_locks(payload: dict, config: AgentConfig) -> dict:
     }
 
 
+def _solar_scan(client: AgentClient, payload: dict) -> dict:
+    """`solar_scan` käsk: skanni BLE-seadmed ja postita kandidaadid serverisse."""
+    timeout = float(payload.get("timeout_seconds") or 12)
+    candidates = solar.scan(timeout=timeout)
+    try:
+        client.post_solar_scan_result(candidates)
+    except Exception as e:
+        log.warning("Solar scan-result post ebaõnnestus: %s", e)
+    return {"candidates_found": len(candidates)}
+
+
+def _maybe_read_solar(client: AgentClient, cfg_part: dict, last_ts: float) -> float:
+    """Kui kapil on solar lubatud ja seade valitud, loeb MPPT frame'i
+    `interval_seconds` tagant ja postitab serverisse. Konfig tuleb serverilt
+    (build_agent_config → config.solar), seega Pi seadistab end ise."""
+    solar_cfg = (cfg_part or {}).get("solar") or {}
+    if not solar_cfg.get("enabled") or not solar_cfg.get("ble_mac"):
+        return last_ts
+    interval = max(15, int(solar_cfg.get("interval_seconds") or 60))
+    now = time.time()
+    if now - last_ts < interval:
+        return last_ts
+    reading = solar.read_once(solar_cfg["ble_mac"])
+    if reading is None:
+        return now  # märgime katse ajaks, et mitte iga loop'iga uuesti proovida
+    payload = {k: v for k, v in reading.items() if k not in ("ok", "reason")}
+    try:
+        client.post_solar_reading(payload)
+        log.info("Solar lugem saadetud: pv=%sW soc=%s%%",
+                 reading.get("pv_power_w"), reading.get("battery_soc_percent"))
+    except Exception as e:
+        log.warning("Solar lugemi saatmine ebaõnnestus: %s", e)
+    return now
+
+
 def run() -> None:
     config = AgentConfig.load()
     secrets = AgentSecrets.load()
@@ -278,6 +316,7 @@ def run() -> None:
     )
 
     last_discovery_ts = 0.0
+    last_solar_ts = 0.0
     discovery_period = max(60, config.discovery_interval_minutes * 60)
 
     with AgentClient(server_url=config.server_url) as client_:
@@ -370,6 +409,8 @@ def run() -> None:
             else:
                 from .display import write_state
                 write_state(new_state)
+
+            last_solar_ts = _maybe_read_solar(client, cfg_part, last_solar_ts)
 
             handle_long_poll_response(client, resp, config)
 

@@ -70,6 +70,25 @@ class AgentClient:
         r.raise_for_status()
         return r.json()
 
+    def post_solar_reading(self, values: dict) -> None:
+        """Saadab ühe MPPT live-lugemi serverisse (aegrida = ajalugu).
+        `values` = parse_frame() väljund (ts, raw_hex + mõõteväljad)."""
+        r = self._http.post(
+            f"{self.server_url}/api/agent/v1/solar/reading",
+            json=values,
+            headers=self._agent_headers(),
+        )
+        r.raise_for_status()
+
+    def post_solar_scan_result(self, candidates: list[dict]) -> None:
+        """Saadab BLE-skanni tulemuse (kandidaatseadmed) serverisse."""
+        r = self._http.post(
+            f"{self.server_url}/api/agent/v1/solar/scan-result",
+            json={"candidates": candidates},
+            headers=self._agent_headers(),
+        )
+        r.raise_for_status()
+
     def ack_command(self, command_id: str, *, status: str, result: dict | None) -> None:
         r = self._http.post(
             f"{self.server_url}/api/agent/v1/commands/{command_id}/ack",

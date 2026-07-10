@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kohvrikapid-agent"
-version = "0.1.0"
+version = "0.2.0"
 description = "Raspberry Pi agent for the Kohvrikapid multi-tenant locker platform."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -17,6 +17,7 @@ dependencies = [
   "Pillow>=10.0",
   "qrcode>=7.4",
   "numpy>=1.26",
+  "bleak>=0.22",
 ]
 
 [project.optional-dependencies]
