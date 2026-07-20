@@ -21,11 +21,29 @@ export DEBIAN_FRONTEND=noninteractive
 INSTALL_DIR=/opt/kohvrikapid-agent
 CU="${SUDO_USER:-pi}"
 
-echo "== 1/4: Kohvrikapid agent (ametlik installer: agent + 4G/eth võrk + kiosk) =="
+echo "== 1/5: Kohvrikapid agent (ametlik installer: agent + 4G/eth võrk + kiosk) =="
 # ENABLE_KIOSK=1 (vaikimisi) paigaldab ka kiosk-UI (chromium). server_url = ctr-locker.kakuweb.ee.
 curl -fsSL https://raw.githubusercontent.com/kkolk152/kohvrikapid-agent/main/install.sh | bash
 
-echo "== 2/4: SSH + Raspberry Pi Connect (turvaline kaug-ligipääs, ka 4G/NAT taga) =="
+echo "== 2/5: Luba OTA self-update (agent uueneb portaalist iseseisvalt) =="
+# install.sh paigaldab /opt root-omandis + range sandbox (ProtectSystem=strict,
+# NoNewPrivileges=true), ilma sudo-õiguseta. Seetõttu agent EI SAA OTA-firmware'i
+# oma /opt-i paigaldada (install-firmware.sh vajab kirjutust + sudo root-iks) ja
+# OTA jääb igavesse loopi, mürgitades healthz'i → kiosk ei käivitu. Paranda:
+chown -R kohvrikapid:kohvrikapid "$INSTALL_DIR" 2>/dev/null || true
+install -d /etc/systemd/system/kohvrikapid-agent.service.d
+cat > /etc/systemd/system/kohvrikapid-agent.service.d/10-ota.conf <<'EOF'
+[Service]
+# OTA install-firmware.sh vajab kirjutusõigust /opt-i ja sudo-t (root-iks)
+ReadWritePaths=/opt/kohvrikapid-agent
+NoNewPrivileges=false
+EOF
+echo 'kohvrikapid ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/kohvrikapid-ota
+chmod 440 /etc/sudoers.d/kohvrikapid-ota
+systemctl daemon-reload 2>/dev/null || true
+systemctl restart kohvrikapid-agent 2>/dev/null || true
+
+echo "== 3/5: SSH + Raspberry Pi Connect (turvaline kaug-ligipääs, ka 4G/NAT taga) =="
 apt-get update -qq || true
 apt-get install -y --no-install-recommends openssh-server rpi-connect-lite 2>/dev/null || \
 	apt-get install -y --no-install-recommends openssh-server rpi-connect 2>/dev/null || true
@@ -38,7 +56,7 @@ if [ -f /usr/lib/systemd/user/rpi-connect.service ]; then
 	chown -R "$CU:$CU" "/home/$CU/.config" 2>/dev/null || true
 fi
 
-echo "== 3/4: 4G/eth re-tuvastus (hotplug + perioodiline) =="
+echo "== 4/5: 4G/eth re-tuvastus (hotplug + perioodiline) =="
 cat > /etc/udev/rules.d/99-kohvrikapid-4g.rules <<'EOF'
 ACTION=="add", SUBSYSTEM=="net", KERNEL=="usb0", RUN+="/usr/local/sbin/calyx-up.sh"
 SUBSYSTEM=="usb", ATTR{idVendor}=="1d12", ATTR{idProduct}=="0101", RUN+="/usr/local/sbin/calyx-up.sh"
@@ -67,7 +85,7 @@ WantedBy=timers.target
 EOF
 systemctl enable kohvrikapid-netcheck.timer 2>/dev/null || true
 
-echo "== 4/4: Ekraani-tuvastus → kiosk ainult ekraani olemasolul =="
+echo "== 5/5: Ekraani-tuvastus → kiosk ainult ekraani olemasolul =="
 cat > /usr/local/sbin/kohvrikapid-display-detect.sh <<'EOF'
 #!/usr/bin/env bash
 OUT=/run/kohvrikapid-display
@@ -112,6 +130,9 @@ cat <<'EOF'
   1. sudo reboot
   2. Kontrolli platvormil (Seadmed), et Pi registreerus -> paarita kapiga.
   3. Raspberry Pi Connect: jooksuta 'rpi-connect signin' -> ava link -> logi Raspberry Pi ID-ga.
-  4. Ekraaniga Pi: kiosk (setup/staatus leht) käivitub automaatselt boot'il.
-  5. Soovi korral tee sellest SD-st korduvkasutatav .img (dd + pishrink).
+  4. EKRAANIGA Pi: kiosk käivitub alles siis, kui kapil on portaalis KONTAKTTELEFON
+     seatud (kiosk ootab /api/tenant-ready 200; has_phone=false hoiab kinni).
+     Sea number portaalis -> kiosk tõuseb ise (Restart=always).
+  5. OTA-uuendused portaalist töötavad nüüd iseseisvalt (self-update lubatud).
+  6. Soovi korral tee sellest SD-st korduvkasutatav .img (dd + pishrink).
 EOF
