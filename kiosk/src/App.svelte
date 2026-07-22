@@ -32,13 +32,11 @@
 
   <header class="relative z-10 flex items-center justify-between px-5 py-3">
     <div class="flex items-center gap-2">
-      <div class="grid size-8 place-items-center rounded-lg bg-white text-slate-900">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-          <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="2"/>
-          <path d="M3 12h18M12 3v18" stroke="currentColor" stroke-width="2"/>
-        </svg>
-      </div>
-      <div class="text-sm font-semibold tracking-tight">Kohvrikapid</div>
+      <!-- Tenant/kapi logo — agent serveerib seda (kapi sätete logo või Kohvrikapid vaikelogo) -->
+      <img src="/TH-Express-202604.png" alt="" class="h-7 max-w-[140px] object-contain" />
+      {#if $agentState.tenant_name}
+        <div class="text-sm font-semibold tracking-tight text-slate-300">{$agentState.tenant_name}</div>
+      {/if}
     </div>
     <div class="flex items-center gap-2 text-[10px] text-slate-400">
       <NetworkBadge network={$agentState.network} />
