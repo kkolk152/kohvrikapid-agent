@@ -25,6 +25,10 @@ require_root() {
 
 ensure_deps() {
   echo "[1/9] Paigaldan Debiani paketid"
+  # Taasta katkenud dpkg/apt (nt kui image'i esmakaivitus / eelnev apt jai pooleli).
+  # Ilma selleta failib apt-get: "dpkg was interrupted, run 'dpkg --configure -a'".
+  dpkg --configure -a 2>/dev/null || true
+  apt-get -f install -y 2>/dev/null || true
   apt-get update -qq
   apt-get install -y --no-install-recommends \
     python3 python3-venv python3-pip git ca-certificates curl \
