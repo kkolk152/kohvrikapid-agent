@@ -172,8 +172,8 @@ install_service() {
 # kirjuta) -> OTA tar kukub "Read-only file system". Tuhjad vaartused reset'ivad need
 # direktiivid. Vastab firmware 0.2.90 non-sandboxed unitile; parast 1. edukat OTAt
 # votab firmware oma unit yle.
-ProtectSystem=
-ProtectHome=
+ProtectSystem=false
+ProtectHome=false
 ReadOnlyPaths=
 ReadWritePaths=
 NoNewPrivileges=false
