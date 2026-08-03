@@ -155,6 +155,20 @@ install_service() {
     install -m 644 "$INSTALL_DIR/systemd/kohvrikapid-kiosk.service" /etc/systemd/system/
   fi
 
+  # Luba OTA self-update: baas-unit on range sandbox (ProtectSystem=strict,
+  # ReadWritePaths ei kata /opt-i, NoNewPrivileges=true) -> agent EI SAA
+  # install-firmware.sh-ga /opt-i uut firmware'i kirjutada ja OTA jaaks igavesse
+  # loopi (jaaks vanale versioonile). Drop-in + sudoers annavad OTA-le kirjutuse.
+  chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR" 2>/dev/null || true
+  install -d /etc/systemd/system/kohvrikapid-agent.service.d
+  cat > /etc/systemd/system/kohvrikapid-agent.service.d/10-ota.conf <<'OTAEOF'
+[Service]
+ReadWritePaths=/opt/kohvrikapid-agent
+NoNewPrivileges=false
+OTAEOF
+  echo "$SERVICE_USER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/kohvrikapid-ota
+  chmod 440 /etc/sudoers.d/kohvrikapid-ota
+
   systemctl daemon-reload
   systemctl enable --now kohvrikapid-agent.service
   if [[ "$ENABLE_KIOSK" == "1" ]]; then
