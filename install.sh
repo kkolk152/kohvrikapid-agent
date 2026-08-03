@@ -185,6 +185,34 @@ OTAEOF
 NEED_REBOOT=0
 
 require_root
+
+# --- tmux: hoia install elus ka kui SSH katkeb (vorgu umberseadistus katkestab eth0-SSH-i) ---
+# Kui me pole juba tmux-is, paigalda tmux, lae skript ja kaivita see tmux-sessioonis "kohv".
+if [[ -z "${TMUX:-}" && "${KOHV_IN_TMUX:-}" != "1" ]]; then
+  if ! command -v tmux >/dev/null 2>&1; then
+    dpkg --configure -a 2>/dev/null || true
+    apt-get update -qq 2>/dev/null || true
+    apt-get install -y --no-install-recommends tmux 2>/dev/null || true
+  fi
+  if command -v tmux >/dev/null 2>&1; then
+    SELF=/tmp/kohvrikapid-install.sh
+    if curl -fsSL "https://github.com/kkolk152/kohvrikapid-agent/raw/main/install.sh" -o "$SELF" 2>/dev/null && [[ -s "$SELF" ]]; then
+      chmod +x "$SELF"
+      echo "===================================================================="
+      echo " Kaivitan installi tmux-sessioonis 'kohv' (SSH voib katkeda — see on OK)."
+      echo "   Taasuhendu + jatka:   sudo tmux attach -t kohv"
+      echo "   Voi jalgi logi:       sudo tail -f /var/log/kohv-install.log"
+      echo "===================================================================="
+      sleep 2
+      tmux kill-session -t kohv 2>/dev/null || true
+      tmux new-session -d -s kohv "KOHV_IN_TMUX=1 ENABLE_KIOSK='${ENABLE_KIOSK}' SERVER_URL='${SERVER_URL_DEFAULT}' bash '$SELF' 2>&1 | tee /var/log/kohv-install.log; echo; echo '=== INSTALL LOPETATUD — vajuta Enter et aken sulgeda ==='; read -r"
+      echo "tmux sessioon 'kohv' kaivitatud taustal.  Jalgimiseks:  sudo tmux attach -t kohv"
+      exit 0
+    fi
+  fi
+  echo "HOIATUS: tmux pole saadaval — jooksen otse. SSH katkemisel install katkeb." >&2
+fi
+
 ensure_deps
 ensure_user
 clone_or_update
