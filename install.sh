@@ -167,10 +167,25 @@ install_service() {
   install -d /etc/systemd/system/kohvrikapid-agent.service.d
   cat > /etc/systemd/system/kohvrikapid-agent.service.d/10-ota.conf <<'OTAEOF'
 [Service]
-ReadWritePaths=/opt/kohvrikapid-agent
+# Neutraliseeri base-uniti sandbox TAIELIKULT. Ainult ReadWritePaths=/opt lisamisest
+# EI PIISA: ProtectSystem=strict teeb /opt read-only mount-tasemel (ka sudo-root ei
+# kirjuta) -> OTA tar kukub "Read-only file system". Tuhjad vaartused reset'ivad need
+# direktiivid. Vastab firmware 0.2.90 non-sandboxed unitile; parast 1. edukat OTAt
+# votab firmware oma unit yle.
+ProtectSystem=
+ProtectHome=
+ReadOnlyPaths=
+ReadWritePaths=
 NoNewPrivileges=false
 OTAEOF
-  echo "$SERVICE_USER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/kohvrikapid-ota
+  # Kitsas sudoers (mitte NOPASSWD:ALL): luba agendil ainult OTA-paigaldusskript
+  # root-ina kaivitada. install-firmware.sh eskaleerub ise `sudo -n`-iga. Katab nii
+  # bin/ kui scripts/ tee (config default = bin/). Uhtib firmware sudoers-failiga.
+  cat > /etc/sudoers.d/kohvrikapid-ota <<SUDOEOF
+$SERVICE_USER ALL=(root) NOPASSWD: /opt/kohvrikapid-agent/bin/install-firmware.sh
+$SERVICE_USER ALL=(root) NOPASSWD: /opt/kohvrikapid-agent/scripts/install-firmware.sh
+$SERVICE_USER ALL=(root) NOPASSWD: /opt/kohvrikapid-agent/scripts/enable-modem-at.sh
+SUDOEOF
   chmod 440 /etc/sudoers.d/kohvrikapid-ota
 
   systemctl daemon-reload
