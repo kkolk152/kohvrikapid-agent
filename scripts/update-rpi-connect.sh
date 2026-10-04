@@ -32,11 +32,25 @@ failed() {
 }
 trap failed ERR
 
-if dpkg-query -W -f='${Status}' rpi-connect 2>/dev/null | grep -q 'ok installed'; then
-  CONNECT_PACKAGE=rpi-connect
-elif dpkg-query -W -f='${Status}' rpi-connect-lite 2>/dev/null | grep -q 'ok installed'; then
-  CONNECT_PACKAGE=rpi-connect-lite
-else
+CONNECT_PACKAGE=""
+if command -v rpi-connect >/dev/null 2>&1; then
+  # Tuvasta pakett binaari omaniku järgi. See töötab ka dpkg olekutes iF/iU,
+  # kus pakett on kettal olemas, kuid seadistamine jäi pooleli.
+  CONNECT_PACKAGE=$(dpkg-query -S "$(command -v rpi-connect)" 2>/dev/null \
+    | head -1 | cut -d: -f1 || true)
+fi
+case "$CONNECT_PACKAGE" in
+  rpi-connect|rpi-connect-lite) ;;
+  *)
+    CONNECT_PACKAGE=""
+    dpkg-query -W rpi-connect >/dev/null 2>&1 && CONNECT_PACKAGE=rpi-connect
+    if [[ -z "$CONNECT_PACKAGE" ]]; then
+      dpkg-query -W rpi-connect-lite >/dev/null 2>&1 && CONNECT_PACKAGE=rpi-connect-lite
+    fi
+    ;;
+esac
+
+if [[ -z "$CONNECT_PACKAGE" ]]; then
   write_status failed "rpi-connect ega rpi-connect-lite ei ole paigaldatud."
   echo "Raspberry Pi Connect ei ole paigaldatud." >&2
   exit 2
@@ -58,7 +72,19 @@ fi
 write_status running "Uuendan paketti $CONNECT_PACKAGE. Remote Desktop võib ajutiselt katkeda."
 echo "Uuendan Raspberry Pi Connecti paketti: $CONNECT_PACKAGE"
 apt-get -o DPkg::Lock::Timeout=600 update -qq
-apt-get -o DPkg::Lock::Timeout=600 install -y --only-upgrade "$CONNECT_PACKAGE"
+
+# Paranda esmalt pooleli jäänud dpkg seis (nt `dpkg -l` olek iF). See võib
+# Connecti protsessi peatada, kuid skript ise töötab systemd system-service'is.
+if ! dpkg --force-confold --configure -a; then
+  apt-get -o DPkg::Lock::Timeout=600 \
+    -o Dpkg::Options::="--force-confold" -f install -y
+  dpkg --force-confold --configure -a
+fi
+
+# --reinstall parandab ka olukorra, kus installed == candidate, kuid paketi
+# seadistus või failid jäid eelmise Connecti uuenduse ajal poolikuks.
+apt-get -o DPkg::Lock::Timeout=600 \
+  -o Dpkg::Options::="--force-confold" install -y --reinstall "$CONNECT_PACKAGE"
 
 if [[ -n "$CONNECT_USER" ]] && id "$CONNECT_USER" >/dev/null 2>&1; then
   CONNECT_UID=$(id -u "$CONNECT_USER")
@@ -79,4 +105,3 @@ fi
 
 write_status success "Pakett $CONNECT_PACKAGE on uuendatud; Connecti teenus käivitati uuesti."
 echo "Raspberry Pi Connecti uuendus lõpetatud."
-
