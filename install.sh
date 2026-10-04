@@ -15,6 +15,16 @@ LOG_DIR="/var/log/kohvrikapid-agent"
 SERVICE_USER="kohvrikapid"
 SERVER_URL_DEFAULT="${SERVER_URL:-https://ctr-locker.kakuweb.ee}"
 ENABLE_KIOSK="${ENABLE_KIOSK:-1}"   # 0 = ainult headless agent (ekraanita Pi)
+UPDATE_MODE=0
+
+# Olemasoleva toimiva installi uuendamisel ei tohi võrgu bootstrap'i uuesti
+# käivitada: see peatab NetworkManageri/dhcpcd ja võib aktiivse SSH ühenduse
+# katkestada. Poolikut esmapaigaldust ei loe me uuenduseks.
+if [[ -d "$INSTALL_DIR/.git" \
+   && -f "$CONFIG_DIR/config.toml" \
+   && -f /etc/systemd/system/kohvrikapid-agent.service ]]; then
+  UPDATE_MODE=1
+fi
 
 require_root() {
   if [[ $EUID -ne 0 ]]; then
@@ -24,17 +34,57 @@ require_root() {
 }
 
 ensure_deps() {
+  local base_packages=(
+    python3 python3-venv python3-pip git ca-certificates curl
+    busybox dnsmasq nftables usb-modeswitch udev iproute2 iputils-ping
+    fonts-dejavu-core bluez
+  )
+  local kiosk_packages=(cage seatd cog nodejs npm)
+
+  if [[ "$UPDATE_MODE" == "1" ]]; then
+    local missing=()
+    local pkg
+    for pkg in "${base_packages[@]}"; do
+      dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q 'ok installed' || missing+=("$pkg")
+    done
+    if [[ "$ENABLE_KIOSK" == "1" ]]; then
+      for pkg in "${kiosk_packages[@]}"; do
+        dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q 'ok installed' || missing+=("$pkg")
+      done
+    fi
+
+    local need_chromium=0
+    if [[ "$ENABLE_KIOSK" == "1" ]] \
+      && ! command -v chromium >/dev/null 2>&1 \
+      && ! command -v chromium-browser >/dev/null 2>&1; then
+      need_chromium=1
+    fi
+
+    if [[ ${#missing[@]} -eq 0 && "$need_chromium" == "0" ]]; then
+      echo "[1/9] Uuendusrežiim: süsteemipaketid on olemas, jätan apt-i vahele"
+      return
+    fi
+
+    echo "[1/9] Uuendusrežiim: paigaldan ainult puuduvad paketid: ${missing[*]:-(chromium)}"
+    apt-get update -qq
+    if [[ "$need_chromium" == "1" ]]; then
+      local chromium_pkg="chromium"
+      if ! apt-cache show chromium &>/dev/null; then
+        chromium_pkg="chromium-browser"
+      fi
+      missing+=("$chromium_pkg")
+    fi
+    apt-get install -y --no-install-recommends "${missing[@]}"
+    return
+  fi
+
   echo "[1/9] Paigaldan Debiani paketid"
   # Taasta katkenud dpkg/apt (nt kui image'i esmakaivitus / eelnev apt jai pooleli).
   # Ilma selleta failib apt-get: "dpkg was interrupted, run 'dpkg --configure -a'".
   dpkg --configure -a 2>/dev/null || true
   apt-get -f install -y 2>/dev/null || true
   apt-get update -qq
-  apt-get install -y --no-install-recommends \
-    python3 python3-venv python3-pip git ca-certificates curl \
-    busybox dnsmasq nftables usb-modeswitch udev iproute2 iputils-ping \
-    fonts-dejavu-core \
-    bluez
+  apt-get install -y --no-install-recommends "${base_packages[@]}"
 
   if [[ "$ENABLE_KIOSK" == "1" ]]; then
     echo "[1b/9] Paigaldan kioski paketid (chromium + cage + node)"
@@ -43,9 +93,7 @@ ensure_deps() {
     if ! apt-cache show chromium &>/dev/null; then
       chromium_pkg="chromium-browser"
     fi
-    apt-get install -y --no-install-recommends \
-      "$chromium_pkg" cage seatd cog \
-      nodejs npm
+    apt-get install -y --no-install-recommends "$chromium_pkg" "${kiosk_packages[@]}"
   fi
 }
 
@@ -122,8 +170,14 @@ EOF
 }
 
 install_network_bootstrap() {
-  echo "[7/9] Network bootstrap (udhcpc usb0/eth0 + dnsmasq + nft NAT)"
-  INSTALL_DIR="$INSTALL_DIR" bash "$INSTALL_DIR/scripts/network-bootstrap.sh"
+  if [[ "$UPDATE_MODE" == "1" ]]; then
+    echo "[7/9] Uuendusrežiim: värskendan võrgufailid ilma aktiivset võrku puutumata"
+    NETWORK_BOOTSTRAP_REFRESH_ONLY=1 INSTALL_DIR="$INSTALL_DIR" \
+      bash "$INSTALL_DIR/scripts/network-bootstrap.sh"
+  else
+    echo "[7/9] Network bootstrap (udhcpc usb0/eth0 + dnsmasq + nft NAT)"
+    INSTALL_DIR="$INSTALL_DIR" bash "$INSTALL_DIR/scripts/network-bootstrap.sh"
+  fi
 }
 
 apply_kernel_cmdline() {
@@ -189,9 +243,19 @@ SUDOEOF
   chmod 440 /etc/sudoers.d/kohvrikapid-ota
 
   systemctl daemon-reload
-  systemctl enable --now kohvrikapid-agent.service
+  if [[ "$UPDATE_MODE" == "1" ]]; then
+    systemctl enable kohvrikapid-agent.service
+    systemctl restart kohvrikapid-agent.service
+  else
+    systemctl enable --now kohvrikapid-agent.service
+  fi
   if [[ "$ENABLE_KIOSK" == "1" ]]; then
-    systemctl enable --now kohvrikapid-kiosk.service || true
+    if [[ "$UPDATE_MODE" == "1" ]]; then
+      systemctl enable kohvrikapid-kiosk.service || true
+      systemctl try-restart kohvrikapid-kiosk.service || true
+    else
+      systemctl enable --now kohvrikapid-kiosk.service || true
+    fi
   fi
   sleep 2
   systemctl status --no-pager kohvrikapid-agent.service || true
@@ -235,12 +299,18 @@ install_venv
 build_kiosk_ui
 write_config
 install_network_bootstrap
-apply_kernel_cmdline
+if [[ "$UPDATE_MODE" == "1" ]]; then
+  echo "[8/9] Uuendusrežiim: kerneli ja võrgu algseadistust ei muudeta"
+else
+  apply_kernel_cmdline
+fi
 install_service
+
+touch "$STATE_DIR/.install-complete"
 
 cat <<EOF
 
-✅ Kohvrikapid Agent paigaldatud.
+✅ Kohvrikapid Agent $([[ "$UPDATE_MODE" == "1" ]] && echo "uuendatud" || echo "paigaldatud").
 
 Seerianumber: $(/opt/kohvrikapid-agent/.venv/bin/kohvrikapid-agent --serial)
 

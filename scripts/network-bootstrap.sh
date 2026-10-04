@@ -10,6 +10,7 @@
 set -euo pipefail
 
 INSTALL_DIR="${INSTALL_DIR:-/opt/kohvrikapid-agent}"
+REFRESH_ONLY="${NETWORK_BOOTSTRAP_REFRESH_ONLY:-0}"
 SRC_NET_DIR="$INSTALL_DIR/scripts/network"
 SRC_UNIT_DIR="$INSTALL_DIR/systemd/network"
 SRC_CONFIG_DIR="$INSTALL_DIR/config"
@@ -18,13 +19,17 @@ log() { logger -t kohvrikapid-net-bootstrap -- "$*"; echo "[net-bootstrap] $*"; 
 
 [[ $EUID -eq 0 ]] || { echo "Käivita rootina"; exit 1; }
 
-log "Keelan konkureerivad võrgu daemon-id"
-systemctl disable --now dhcpcd 2>/dev/null || true
-systemctl disable --now NetworkManager 2>/dev/null || true
-systemctl disable --now ModemManager 2>/dev/null || true
-systemctl mask ModemManager 2>/dev/null || true
-# dnsmasq käivitatakse ainult router-režiimis (eth0-mode.sh)
-systemctl disable dnsmasq 2>/dev/null || true
+if [[ "$REFRESH_ONLY" != "1" ]]; then
+  log "Keelan konkureerivad võrgu daemon-id"
+  systemctl disable --now dhcpcd 2>/dev/null || true
+  systemctl disable --now NetworkManager 2>/dev/null || true
+  systemctl disable --now ModemManager 2>/dev/null || true
+  systemctl mask ModemManager 2>/dev/null || true
+  # dnsmasq käivitatakse ainult router-režiimis (eth0-mode.sh)
+  systemctl disable dnsmasq 2>/dev/null || true
+else
+  log "Uuendusrežiim: jätan töötavad võrguteenused puutumata"
+fi
 
 log "Paigaldan skriptid /usr/local/sbin"
 install -d -m 755 /usr/local/sbin
@@ -64,24 +69,31 @@ net.ipv4.ip_forward=1
 EOF
 sysctl -p /etc/sysctl.d/99-kohvrikapid-ipforward.conf >/dev/null || true
 
-log "Aktiveerin systemd timer-id ja path-i"
 systemctl daemon-reload
-systemctl enable --now udhcpc-usb0.timer
-systemctl enable --now udhcpc-eth0.timer
-systemctl enable --now eth0-mode.timer
-systemctl enable --now eth0-mode.path
-systemctl enable --now 4g-watchdog.timer
-systemctl enable --now dhcp-reservation-cleanup.timer
-systemctl enable calyx-up.service || true
+if [[ "$REFRESH_ONLY" != "1" ]]; then
+  log "Aktiveerin systemd timer-id ja path-i"
+  systemctl enable --now udhcpc-usb0.timer
+  systemctl enable --now udhcpc-eth0.timer
+  systemctl enable --now eth0-mode.timer
+  systemctl enable --now eth0-mode.path
+  systemctl enable --now 4g-watchdog.timer
+  systemctl enable --now dhcp-reservation-cleanup.timer
+  systemctl enable calyx-up.service || true
+else
+  log "Uuendusrežiim: unit-failid värskendatud, võrku ei taaskäivitatud"
+fi
 
 # Algfailid (tühjad) — dnsmasq vajab et need olemas oleksid enne käivitamist
 touch /etc/dnsmasq.d/kohvrikapid-reservations.conf
 mkdir -p /var/lib/kohvrikapid-agent
 touch /var/lib/kohvrikapid-agent/dhcp-reservations.tsv
 
-# Esimene käivitus kohe
-systemctl start calyx-up.service || true
-systemctl start udhcpc-usb0.service || true
-systemctl start eth0-mode.service || true
+# Esmapaigaldusel käivita võrgu tuvastus kohe. Uuendusel ei tohi need käsud
+# aktiivset SSH marsruuti muuta.
+if [[ "$REFRESH_ONLY" != "1" ]]; then
+  systemctl start calyx-up.service || true
+  systemctl start udhcpc-usb0.service || true
+  systemctl start eth0-mode.service || true
+fi
 
 log "Network bootstrap valmis."
