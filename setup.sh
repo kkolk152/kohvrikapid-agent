@@ -45,8 +45,17 @@ systemctl restart kohvrikapid-agent 2>/dev/null || true
 
 echo "== 3/5: SSH + Raspberry Pi Connect (turvaline kaug-ligipääs, ka 4G/NAT taga) =="
 apt-get update -qq || true
-apt-get install -y --no-install-recommends openssh-server rpi-connect-lite 2>/dev/null || \
-	apt-get install -y --no-install-recommends openssh-server rpi-connect 2>/dev/null || true
+if dpkg-query -W -f='${Status}' rpi-connect 2>/dev/null | grep -q 'ok installed' \
+	|| [ -f /usr/share/wayland-sessions/labwc.desktop ] \
+	|| [ -f /usr/share/wayland-sessions/wayfire.desktop ]; then
+	# Desktop / Remote Desktop: säilita täisversioon (Lite ei toeta ekraanijagamist).
+	apt-get install -y --no-install-recommends openssh-server rpi-connect rpi-connect-ota 2>/dev/null || true
+else
+	# Headless seade: Lite toetab remote shelli. OTA-pakett lubab süsteemseid
+	# taustauuendusi, mis ei sõltu avatud Connecti sessioonist.
+	apt-get install -y --no-install-recommends openssh-server rpi-connect-lite rpi-connect-ota 2>/dev/null || \
+		apt-get install -y --no-install-recommends openssh-server rpi-connect rpi-connect-ota 2>/dev/null || true
+fi
 systemctl enable --now ssh 2>/dev/null || systemctl enable --now sshd 2>/dev/null || true
 loginctl enable-linger "$CU" 2>/dev/null || { install -d /var/lib/systemd/linger; touch "/var/lib/systemd/linger/$CU"; }
 if [ -f /usr/lib/systemd/user/rpi-connect.service ]; then

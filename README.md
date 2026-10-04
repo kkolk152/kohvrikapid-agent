@@ -71,6 +71,23 @@ kohvrikapid-agent --serial      # Näita seerianumbrit
 kohvrikapid-agent --reset       # Kustuta secrets + sunni uus registratsioon
 ```
 
+### Raspberry Pi Connecti turvaline uuendamine
+
+Connecti enda paketi uuendus katkestab aktiivse Remote Desktopi ja remote shelli.
+Käivita uuendus süsteemse taustatööna; töö jätkub ka pärast ühenduse katkemist:
+
+```bash
+sudo systemctl start --no-block kohvrikapid-rpi-connect-update.service
+```
+
+Connect peaks pärast uuendust ise tagasi tulema. Pärast taasühendamist kontrolli:
+
+```bash
+cat /var/lib/kohvrikapid-agent/rpi-connect-update.status
+sudo journalctl -u kohvrikapid-rpi-connect-update.service -n 100 --no-pager
+rpi-connect status
+```
+
 ## Arendus
 
 ```bash

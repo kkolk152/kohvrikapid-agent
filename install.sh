@@ -208,6 +208,8 @@ install_service() {
   install -m 644 "$INSTALL_DIR/systemd/kohvrikapid-agent.service" /etc/systemd/system/
   install -d -m 755 /opt/kohvrikapid-agent/bin
   install -m 755 "$INSTALL_DIR/scripts/install-firmware.sh" /opt/kohvrikapid-agent/bin/install-firmware.sh
+  install -m 755 "$INSTALL_DIR/scripts/update-rpi-connect.sh" /usr/local/sbin/kohvrikapid-update-rpi-connect
+  install -m 644 "$INSTALL_DIR/systemd/kohvrikapid-rpi-connect-update.service" /etc/systemd/system/
 
   if [[ "$ENABLE_KIOSK" == "1" ]]; then
     install -m 644 "$INSTALL_DIR/systemd/kohvrikapid-kiosk.service" /etc/systemd/system/
@@ -323,6 +325,8 @@ Kasulikud käsud:
   sudo systemctl status kohvrikapid-agent kohvrikapid-kiosk
   sudo journalctl -u kohvrikapid-agent -f
   sudo journalctl -u kohvrikapid-kiosk -f
+  sudo systemctl start --no-block kohvrikapid-rpi-connect-update
+  sudo journalctl -u kohvrikapid-rpi-connect-update -f
 EOF
 
 if [[ "$NEED_REBOOT" == "1" ]]; then
